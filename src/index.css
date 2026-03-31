@@ -1,0 +1,65 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: #E8F5E9;
+  color: #1A2E1F;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #4A6B4A55; border-radius: 3px; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Sidebar nav button hover */
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(253, 246, 227, 0.75) !important;
+}
+
+.nav-btn.active {
+  background: rgba(212, 136, 10, 0.15) !important;
+  color: #F5C842 !important;
+}
+
+/* Table row hover */
+.table-row:hover td {
+  background: #E8F5E9;
+}
+
+/* Sidebar transition */
+.sidebar {
+  transition: width 0.28s ease, min-width 0.28s ease;
+}
+
+/* Fade animations for page content */
+.page-enter {
+  animation: slideUp 0.25s ease both;
+}
+
+/* Hide YouTube branding and UI elements */
+iframe[src*="youtube"] {
+  filter: brightness(1) contrast(1);
+}
+
+/* Ensure video covers entire screen without black bars */
+.video-background-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 0;
+}
