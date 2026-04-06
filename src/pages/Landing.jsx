@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Landing({ onStart }) {
+export default function Landing({ onStart, onSetup }) {
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
       {/* SECTION 1: Image hero (first screen) */}
@@ -92,6 +92,7 @@ export default function Landing({ onStart }) {
           >
             Sign Up
           </button>
+
         </div>
 
         {/* Bottom text + features (on top of image) */}

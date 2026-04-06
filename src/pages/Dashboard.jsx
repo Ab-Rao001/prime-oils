@@ -30,7 +30,7 @@ const PAGES = {
   users:         UserManagement,
 };
 
-export default function Dashboard({ user, onLogout, users, setUsers }) {
+export default function Dashboard({ user, onLogout, users = [], setUsers = () => {} }) {
   const navIds = NAV_BY_ROLE[user.role] || NAV_BY_ROLE.admin;
   const [active,   setActive]   = useState(navIds[0] || 'overview');
   const [sideOpen, setSideOpen] = useState(true);
