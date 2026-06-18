@@ -3,36 +3,45 @@ import C from '../theme';
 import Badge from '../components/Badge';
 import SectionHeader from '../components/SectionHeader';
 import StatCard from '../components/StatCard';
-import { CAMPAIGNS } from '../data/mockData';
+import PageLoader from '../components/PageLoader';
+import { ApiError } from '../components/ApiMessage';
+import { useFetch } from '../hooks/useFetch';
+import { api } from '../api/client';
 
 export default function Marketing() {
-  const [campaigns, setCampaigns] = useState(CAMPAIGNS);
+  const { data: campaigns, setData: setCampaigns, loading, error } = useFetch(() => api.getCampaigns(), []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', budget: '', start: '', end: '' });
 
-  const addCampaign = () => {
+  const addCampaign = async () => {
     if (!form.name || !form.budget || !form.start || !form.end) return;
-    const nextId = Math.max(0, ...campaigns.map(c => c.id)) + 1;
     const budgetNum = +form.budget;
     const d1 = new Date(form.start);
     const d2 = new Date(form.end);
     const start = isNaN(d1.getTime()) ? form.start : d1.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     const end = isNaN(d2.getTime()) ? form.end : d2.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-    setCampaigns(prev => ([
-      ...prev,
-      { id: nextId, name: form.name, budget: budgetNum, spent: 0, start, end, status: 'planned', roi: '—' },
-    ]));
-    setForm({ name: '', budget: '', start: '', end: '' });
-    setShowForm(false);
+    try {
+      const created = await api.createCampaign({
+        name: form.name, budget: budgetNum, spent: 0, start, end, status: 'planned', roi: '—',
+      });
+      setCampaigns(prev => [...prev, created]);
+      setForm({ name: '', budget: '', start: '', end: '' });
+      setShowForm(false);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const totalBudget    = campaigns.reduce((a, c) => a + c.budget, 0);
   const totalSpent     = campaigns.reduce((a, c) => a + c.spent, 0);
   const totalRemaining = totalBudget - totalSpent;
 
+  if (loading) return <PageLoader label="Loading campaigns..." />;
+
   return (
     <div className="page-enter">
       <SectionHeader title="Marketing & Advertisement" btn="New Campaign" onBtn={() => setShowForm(true)} />
+      <ApiError error={error} />
 
       {showForm && (
         <div style={{ background: C.card, border: `1px solid ${C.goldBorder}`, borderRadius: 12, padding: 18, marginBottom: 18 }}>

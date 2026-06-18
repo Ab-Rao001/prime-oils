@@ -1,100 +1,88 @@
-# Prime Oil Suppliers – Management System
+# Prime Oil Suppliers
 
-A complete React web application for warehouse and distribution management.
+Prime Oil Suppliers is a comprehensive production-ready platform designed for managing oil distribution, inventory, shopkeepers, orders, payments, and complaints.
 
-## Project Structure
+## Architecture
 
-```
-prime-oil/
-├── public/
-│   └── index.html
-├── src/
-│   ├── components/
-│   │   ├── Badge.jsx          # Status badge component
-│   │   ├── SearchBar.jsx      # Reusable search input
-│   │   ├── SectionHeader.jsx  # Page title + action button
-│   │   ├── Sidebar.jsx        # Role-based navigation sidebar
-│   │   ├── StatCard.jsx       # Dashboard stat card
-│   │   ├── Table.jsx          # THead, TRow, TCell primitives
-│   │   └── Topbar.jsx         # Top navigation bar
-│   ├── data/
-│   │   └── mockData.js        # All mock data & constants
-│   ├── pages/
-│   │   ├── Auth.jsx           # Login & Sign Up page
-│   │   ├── CashFlow.jsx       # Cash flow module
-│   │   ├── Complaints.jsx     # Complaint management
-│   │   ├── Dashboard.jsx      # Main shell (sidebar + content)
-│   │   ├── Inventory.jsx      # Inventory management
-│   │   ├── Landing.jsx        # Animated landing page
-│   │   ├── Marketing.jsx      # Marketing & campaigns
-│   │   ├── Notifications.jsx  # Notification center
-│   │   ├── Orders.jsx         # Order management
-│   │   ├── Overview.jsx       # Dashboard overview
-│   │   ├── Payments.jsx       # Payment & installments
-│   │   ├── Reports.jsx        # Analytics & reports
-│   │   ├── Shopkeepers.jsx    # Shopkeeper management
-│   │   └── UserManagement.jsx # User admin panel
-│   ├── App.jsx                # Root component & page router
-│   ├── index.css              # Global styles & animations
-│   ├── index.js               # React entry point
-│   └── theme.js               # Design tokens & color palette
-└── package.json
-```
+- **Frontend**: React 18, React Router DOM, React Hot Toast, Recharts
+- **Backend**: Node.js, Express, MongoDB (Mongoose), Redis (Caching)
+- **Security**: JWT (`httpOnly` cookies), Helmet, CORS, Rate Limiting, Mongo Sanitize, HPP, CSRF Protection
+- **DevOps**: Docker, Docker Compose, PM2, Nginx, GitHub Actions
 
-## Setup & Run
+## Prerequisites
+
+- Node.js v18+
+- MongoDB v6+
+- Redis v7+
+- Docker & Docker Compose (optional)
+
+## Setup & Local Development
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   cd server && npm install
+   ```
+
+2. **Environment Variables**
+   Create a `.env` file in the `server` directory:
+   ```env
+   NODE_ENV=development
+   PORT=5000
+   MONGODB_URI=mongodb+srv://62426abrao_db_user:cAeFBAB3DGJxMjn@cluster0.suo5dvi.mongodb.net/prime_oils
+   REDIS_URI=redis://localhost:6379
+   JWT_SECRET=your_super_secret_key_32_chars_min
+   SESSION_SECRET=another_super_secret_key
+   ALLOWED_ORIGINS=http://localhost:3000
+   ```
+
+3. **Start the application**
+   ```bash
+   # From root directory
+   npm run dev
+   ```
+
+## Production Deployment
+
+### Using Docker
 
 ```bash
-# 1. Install dependencies
-npm install
-
-# 2. Start development server
-npm start
-
-# 3. Open browser at
-http://localhost:3000
+docker-compose up -d --build
 ```
 
-## Demo Logins
+### Using PM2
 
-| Role        | Email                    | Access |
-|-------------|--------------------------|--------|
-| Admin       | admin@primeoil.com       | All 11 modules |
-| Shopkeeper  | ali@shop.com             | Orders, Payments, Complaints, Notifications |
-| Salesman    | kamran@primeoil.com      | Orders, Payments, Inventory, Shopkeepers, Notifications |
-| Supplier    | supply@factory.com       | Inventory, Notifications |
+1. Build the frontend:
+   ```bash
+   npm run build
+   ```
 
-## Modules
+2. Start the backend with PM2:
+   ```bash
+   pm2 start ecosystem.config.js
+   ```
 
-1. **Overview** – Stats, charts, recent orders
-2. **Inventory** – Product stock management, low-stock alerts
-3. **Orders** – Place, track, update order status
-4. **Payments** – Full & installment tracking, payment collection modal
-5. **Cash Flow** – Daily inflow/outflow, net profit
-6. **Notifications** – Real-time alerts, mark as read
-7. **Complaints** – Register, process, resolve complaints
-8. **Marketing** – Campaign management, budget tracking
-9. **Shopkeepers** – Shop profiles, outstanding balance
-10. **Reports** – Sales analytics, charts, summary reports
-11. **User Management** – Manage system users (Admin only)
+3. Setup Nginx using the provided `nginx.conf`.
 
-## Tech Stack
+## API Documentation
 
-- React 18
-- React Router DOM v6
-- Recharts (charts)
-- Pure inline styles (no CSS framework)
+The API follows RESTful principles and uses standard HTTP status codes. All payloads must be JSON.
 
-## Connect to Backend
+### Endpoints
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/products`
+- `GET /api/orders`
+- `GET /api/shopkeepers`
+- ...
 
-Replace the arrays in `src/data/mockData.js` with `fetch()` calls:
+## Security Hardening
+- **No LocalStorage**: All tokens are strictly stored in `httpOnly` secure cookies.
+- **Strict Validation**: All incoming requests are validated using `zod` schemas.
+- **Role-Based Access Control**: Middleware ensures `admin`, `salesman`, `shopkeeper`, and `supplier` can only access authorized endpoints.
+- **Session Invalidations**: `tokenVersion` ensures all sessions can be invalidated globally.
 
-```js
-// Example: replace PRODUCTS with API call
-const [products, setProducts] = useState([]);
+## License
 
-useEffect(() => {
-  fetch('https://your-api.com/api/products')
-    .then(r => r.json())
-    .then(setProducts);
-}, []);
-```
+Private and Confidential.

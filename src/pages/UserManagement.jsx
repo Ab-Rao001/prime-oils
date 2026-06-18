@@ -1,103 +1,176 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import C from '../theme';
 import Badge from '../components/Badge';
 import SectionHeader from '../components/SectionHeader';
+import SearchBar from '../components/SearchBar';
+import PageLoader from '../components/PageLoader';
+import { ApiError } from '../components/ApiMessage';
 import { THead, TRow, TCell } from '../components/Table';
-import { auth, db } from '../Firebase/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { setDoc, doc, updateDoc } from 'firebase/firestore';
-import { getAuthErrorMessage, validateEmail } from '../Firebase/authUtils';
+import { api } from '../api/client';
 
-export default function UserManagement({ users = [], setUsers }) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'shopkeeper', status: 'active' });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState('');
+const ALL_ROLES = ['admin', 'shopkeeper', 'salesman', 'supplier'];
 
-  const addUser = async () => {
-    const { name, email, password, role, status } = form;
+function formatDate(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
-    if (!name || !email || !password) {
-      setMessage('Please fill in all fields');
-      setMessageType('error');
-      return;
-    }
+function Toast({ message, type, onClose }) {
+  if (!message) return null;
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'fixed',
+        bottom: 24,
+        right: 24,
+        zIndex: 1000,
+        padding: '12px 18px',
+        borderRadius: 10,
+        background: type === 'success' ? C.success : C.danger,
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: 600,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+        maxWidth: 360,
+      }}
+    >
+      {message}
+      <button
+        type="button"
+        onClick={onClose}
+        style={{
+          marginLeft: 12,
+          background: 'transparent',
+          border: 'none',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 16,
+        }}
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
 
-    if (!validateEmail(email)) {
-      setMessage('Invalid email format');
-      setMessageType('error');
-      return;
-    }
+export default function UserManagement() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'shopkeeper' });
+  const [inviting, setInviting] = useState(false);
+  const [actionId, setActionId] = useState(null);
+  const [toast, setToast] = useState({ message: '', type: 'success' });
 
-    if (password.length < 6) {
-      setMessage('Password must be at least 6 characters');
-      setMessageType('error');
-      return;
-    }
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
+  };
 
+  const loadUsers = useCallback(async () => {
     setLoading(true);
-    setMessage('');
-
+    setError(null);
     try {
-      // Create user in Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Store user data in Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        name,
-        email,
-        role,
-        status,
-        createdAt: new Date(),
-      });
-
-      // Update local state
-      setUsers?.(prev => {
-        const safePrev = prev || [];
-        const nextId = Math.max(0, ...safePrev.map(u => u.id || 0)) + 1;
-        return [
-          ...safePrev,
-          { id: nextId, name, email, role, status, firebaseId: user.uid },
-        ];
-      });
-
-      setForm({ name: '', email: '', password: '', role: 'shopkeeper', status: 'active' });
-      setShowForm(false);
-      setMessage(`✓ User ${name} created successfully!`);
-      setMessageType('success');
-
-      setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
-      setMessage(getAuthErrorMessage(err.code));
-      setMessageType('error');
+      const list = await api.getUsers();
+      setUsers(list);
+    } catch (e) {
+      setError(e.message || 'Failed to load users');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return users.filter(u => {
+      if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+      if (!q) return true;
+      return (
+        u.name?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q)
+      );
+    });
+  }, [users, search, roleFilter]);
+
+  const handleInvite = async () => {
+    const { name, email, role } = inviteForm;
+    if (!name.trim() || !email.trim()) {
+      showToast('Name and email are required', 'error');
+      return;
+    }
+
+    setInviting(true);
+    try {
+      const res = await api.createUser({ name: name.trim(), email: email.trim(), role });
+      setUsers(prev => [res.data, ...prev]);
+      setShowInvite(false);
+      setInviteForm({ name: '', email: '', role: 'shopkeeper' });
+      showToast(res.message || 'Invite sent successfully');
+    } catch (e) {
+      showToast(e.message || 'Failed to invite user', 'error');
+    } finally {
+      setInviting(false);
+    }
   };
 
-  const toggleStatus = async (id, currentStatus, email) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-
+  const handleRoleChange = async (user, newRole) => {
+    if (user.role === newRole || user.isSuperAdmin) return;
+    setActionId(user.id);
     try {
-      // Update in local state first
-      setUsers?.(prev => (prev || []).map(u =>
-        u.id === id ? { ...u, status: newStatus } : u
-      ));
+      const res = await api.updateUserRole(user.id, newRole);
+      setUsers(prev => prev.map(u => (u.id === user.id ? res.data : u)));
+      showToast(`Role updated to ${newRole}`);
+    } catch (e) {
+      showToast(e.message || 'Failed to update role', 'error');
+    } finally {
+      setActionId(null);
+    }
+  };
 
-      // Update in Firestore if user has firebaseId
-      const user = users.find(u => u.id === id);
-      if (user?.firebaseId) {
-        await updateDoc(doc(db, 'users', user.firebaseId), { status: newStatus });
-      }
+  const handleDisable = async user => {
+    if (user.isSuperAdmin) {
+      showToast('Super admin cannot be disabled', 'error');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Disable ${user.name}? They will be marked inactive and unable to login.`
+    );
+    if (!confirmed) return;
 
-      setMessage(`✓ User status updated to ${newStatus}`);
-      setMessageType('success');
-      setTimeout(() => setMessage(''), 2000);
-    } catch (err) {
-      setMessage('Error updating user status');
-      setMessageType('error');
+    setActionId(user.id);
+    try {
+      const res = await api.disableUser(user.id);
+      setUsers(prev => prev.map(u => (u.id === user.id ? res.data : u)));
+      showToast(res.message || 'User disabled');
+    } catch (e) {
+      showToast(e.message || 'Failed to disable user', 'error');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleResetPassword = async user => {
+    setActionId(`reset-${user.id}`);
+    try {
+      const res = await api.resetUserPassword(user.id);
+      showToast(res.message || 'Password reset email sent');
+    } catch (e) {
+      showToast(e.message || 'Failed to send reset email', 'error');
+    } finally {
+      setActionId(null);
     }
   };
 
@@ -108,187 +181,269 @@ export default function UserManagement({ users = [], setUsers }) {
     borderRadius: 8,
     background: C.bg,
     color: C.text,
-    outline: 'none',
-    fontSize: '13px',
+    fontSize: 13,
+    boxSizing: 'border-box',
   };
 
-  const labelStyle = {
-    display: 'block',
-    fontSize: 10,
-    color: C.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 5,
-    fontWeight: 600,
-  };
+  if (loading && !users.length) {
+    return <PageLoader label="Loading users..." />;
+  }
 
   return (
     <div className="page-enter">
-      <SectionHeader title="User Management" btn="Add User" onBtn={() => {
-        setShowForm(true);
-        setMessage('');
-      }} />
+      <SectionHeader
+        title="User Management"
+        btn="Invite User"
+        onBtn={() => {
+          setShowInvite(true);
+          setError(null);
+        }}
+      />
 
-      {message && (
-        <div style={{
-          padding: '12px 16px',
-          borderRadius: 8,
-          background: messageType === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-          color: messageType === 'success' ? '#10B981' : '#EF4444',
-          border: `1px solid ${messageType === 'success' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-          marginBottom: 16,
-          fontSize: 13,
-        }}>
-          {message}
+      <p style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+        Manage Prime Oil staff. Invites send a password-setup email.
+      </p>
+
+      <ApiError error={error} />
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+        <div style={{ flex: '1 1 220px', minWidth: 200 }}>
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Search by name or email..."
+          />
         </div>
-      )}
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>
+            Filter by role
+          </label>
+          <select
+            value={roleFilter}
+            onChange={e => setRoleFilter(e.target.value)}
+            style={{ ...inputStyle, minWidth: 160, cursor: 'pointer' }}
+          >
+            <option value="all">All roles</option>
+            {ALL_ROLES.map(r => (
+              <option key={r} value={r}>
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-      {showForm && (
-        <div style={{ background: C.card, border: `1px solid ${C.goldBorder}`, borderRadius: 12, padding: 18, marginBottom: 18 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16 }}>Add New User</div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Full Name</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="John Doe"
-                style={inputStyle}
-              />
+      {showInvite && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 500,
+            padding: 20,
+          }}
+          onClick={() => !inviting && setShowInvite(false)}
+        >
+          <div
+            style={{
+              background: C.card,
+              borderRadius: 14,
+              padding: 24,
+              width: '100%',
+              maxWidth: 440,
+              border: `1px solid ${C.goldBorder}`,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 16 }}>
+              Invite User
             </div>
-
-            <div>
-              <label style={labelStyle}>Email Address</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                placeholder="user@example.com"
-                style={inputStyle}
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Full name</label>
+                <input
+                  type="text"
+                  value={inviteForm.name}
+                  onChange={e => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Email</label>
+                <input
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Role</label>
+                <select
+                  value={inviteForm.role}
+                  onChange={e => setInviteForm({ ...inviteForm, role: e.target.value })}
+                  style={inputStyle}
+                >
+                  {ALL_ROLES.map(r => (
+                    <option key={r} value={r}>
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-
-            <div>
-              <label style={labelStyle}>Password</label>
-              <input
-                type="password"
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                placeholder="Min 6 characters"
-                style={inputStyle}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Role</label>
-              <select
-                value={form.role}
-                onChange={e => setForm({ ...form, role: e.target.value })}
-                style={inputStyle}
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>
+              A password setup email will be sent to this address.
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={handleInvite}
+                disabled={inviting}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: inviting ? C.muted : C.gold,
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  cursor: inviting ? 'not-allowed' : 'pointer',
+                }}
               >
-                <option value="admin">Admin</option>
-                <option value="shopkeeper">Shopkeeper</option>
-                <option value="salesman">Salesman</option>
-                <option value="supplier">Supplier</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Status</label>
-              <select
-                value={form.status}
-                onChange={e => setForm({ ...form, status: e.target.value })}
-                style={inputStyle}
+                {inviting ? 'Sending invite…' : 'Send invite'}
+              </button>
+              <button
+                type="button"
+                disabled={inviting}
+                onClick={() => setShowInvite(false)}
+                style={{
+                  padding: '10px 16px',
+                  background: 'transparent',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                  color: C.muted,
+                  cursor: 'pointer',
+                }}
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
+                Cancel
+              </button>
             </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <button
-              onClick={addUser}
-              disabled={loading}
-              style={{
-                flex: 1,
-                padding: '10px 12px',
-                background: loading ? '#999' : C.gold,
-                border: 'none',
-                borderRadius: 10,
-                color: 'white',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontWeight: 700,
-                opacity: loading ? 0.6 : 1,
-              }}
-            >
-              {loading ? 'Creating...' : 'Create User'}
-            </button>
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setForm({ name: '', email: '', password: '', role: 'shopkeeper', status: 'active' });
-                setMessage('');
-              }}
-              style={{
-                flex: 1,
-                padding: '10px 12px',
-                background: 'transparent',
-                border: `1px solid ${C.border}`,
-                borderRadius: 10,
-                color: C.muted,
-                cursor: 'pointer',
-                fontWeight: 600,
-              }}
-            >
-              Cancel
-            </button>
           </div>
         </div>
       )}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'auto' }}>
-        {users && users.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <THead cols={['ID', 'Name', 'Email', 'Role', 'Status', 'Action']} />
+        {filtered.length > 0 ? (
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+            <THead
+              cols={[
+                'Name',
+                'Email',
+                'Role',
+                'Status',
+                'Joined',
+                'Last login',
+                'Actions',
+              ]}
+            />
             <tbody>
-              {users.map(u => (
-                <TRow key={u.id}>
-                  <TCell>{u.id}</TCell>
-                  <TCell bold>{u.name}</TCell>
-                  <TCell>{u.email}</TCell>
-                  <TCell><Badge s={u.role} /></TCell>
-                  <TCell><Badge s={u.status} /></TCell>
-                  <td style={{ padding: '8px 12px' }}>
-                    <button
-                      onClick={() => toggleStatus(u.id, u.status, u.email)}
-                      style={{
-                        padding: '4px 11px',
-                        background: u.status === 'active' ? '#FEF2F2' : '#F0FDF4',
-                        border: 'none',
-                        borderRadius: 6,
-                        color: u.status === 'active' ? C.danger : C.success,
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      {u.status === 'active' ? 'Disable' : 'Enable'}
-                    </button>
-                  </td>
-                </TRow>
-              ))}
+              {filtered.map(u => {
+                const isActive = u.active !== false && u.status === 'active';
+                const busy = actionId === u.id || actionId === `reset-${u.id}`;
+                return (
+                  <TRow key={u.id}>
+                    <TCell bold>
+                      {u.name}
+                      {u.isSuperAdmin && (
+                        <span style={{ marginLeft: 6, fontSize: 10, color: C.gold }}>SUPER ADMIN</span>
+                      )}
+                    </TCell>
+                    <TCell>{u.email}</TCell>
+                    <TCell>
+                      {u.isSuperAdmin ? (
+                        <Badge s="admin" />
+                      ) : (
+                        <select
+                          value={u.role}
+                          disabled={busy || !isActive}
+                          onChange={e => handleRoleChange(u, e.target.value)}
+                          style={{
+                            ...inputStyle,
+                            padding: '4px 8px',
+                            fontSize: 12,
+                            minWidth: 120,
+                          }}
+                        >
+                          {ALL_ROLES.map(r => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </TCell>
+                    <TCell>
+                      <Badge s={isActive ? 'active' : 'inactive'} />
+                    </TCell>
+                    <TCell>{formatDate(u.joinedDate || u.createdAt)}</TCell>
+                    <TCell>{formatDate(u.lastLogin)}</TCell>
+                    <td style={{ padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        <button
+                          type="button"
+                          disabled={busy || !isActive}
+                          onClick={() => handleResetPassword(u)}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            borderRadius: 6,
+                            border: `1px solid ${C.border}`,
+                            background: C.goldBg,
+                            color: C.gold,
+                            cursor: busy || !isActive ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          Reset Password
+                        </button>
+                        {!u.isSuperAdmin && isActive && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleDisable(u)}
+                            style={{
+                              padding: '5px 10px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              borderRadius: 6,
+                              border: 'none',
+                              background: C.dBg,
+                              color: C.danger,
+                              cursor: busy ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            Disable
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </TRow>
+                );
+              })}
             </tbody>
           </table>
         ) : (
-          <div style={{ padding: '40px', textAlign: 'center', color: C.muted }}>
-            No users found. Click "Add User" to create one.
+          <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>
+            {users.length ? 'No users match your search or filter.' : 'No users yet. Invite someone to get started.'}
           </div>
         )}
       </div>
+
+      <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'success' })} />
     </div>
   );
 }

@@ -1,0 +1,50 @@
+name: Prime Oil CI/CD
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install Frontend Dependencies
+      run: npm ci
+
+    - name: Build Frontend
+      run: npm run build
+
+    - name: Install Backend Dependencies
+      run: cd server && npm ci
+
+    - name: Run Backend Tests
+      run: cd server && npm test
+      env:
+        NODE_ENV: test
+        JWT_SECRET: test-secret-key-that-is-long-enough
+
+  docker-build:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build Docker Images
+      run: docker-compose build

@@ -1,11 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import C from '../theme';
 import Badge from '../components/Badge';
 import SectionHeader from '../components/SectionHeader';
-import { COMPLAINTS, PRODUCTS } from '../data/mockData';
+import PageLoader from '../components/PageLoader';
+import { ApiError } from '../components/ApiMessage';
+import { useFetch } from '../hooks/useFetch';
+import { api } from '../api/client';
 
 export default function Complaints({ role, user }) {
-  const [cmps, setCmps] = useState(COMPLAINTS);
+  const { data: cmps, setData: setCmps, loading, error } = useFetch(() => api.getComplaints(), []);
+  const { data: products } = useFetch(() => api.getProducts(), []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ product: '', type: 'damaged', issue: '' });
 
@@ -14,10 +18,16 @@ export default function Complaints({ role, user }) {
     return cmps;
   }, [cmps, role, user]);
 
-  const update = (id, status) =>
-    setCmps(cmps.map(c => c.id === id ? { ...c, status } : c));
+  const update = async (id, status) => {
+    try {
+      const updated = await api.updateComplaint(id, { status });
+      setCmps(prev => prev.map(c => c.id === id ? updated : c));
+    } catch {
+      setCmps(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+    }
+  };
 
-  const registerComplaint = () => {
+  const registerComplaint = async () => {
     if (!form.product || !form.issue) return;
     const maxNum = Math.max(
       0,
@@ -27,24 +37,28 @@ export default function Complaints({ role, user }) {
     const d = new Date();
     const date = d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).split(',')[0];
 
-    setCmps(prev => ([
-      ...prev,
-      {
-        id,
+    try {
+      const created = await api.createComplaint({
         shop: user?.name || 'Unknown Shop',
         product: form.product,
         issue: form.issue,
         type: form.type,
         status: 'pending',
         date,
-      },
-    ]));
-    setForm({ product: '', type: 'damaged', issue: '' });
-    setShowForm(false);
+      });
+      setCmps(prev => [...prev, created]);
+      setForm({ product: '', type: 'damaged', issue: '' });
+      setShowForm(false);
+    } catch (e) {
+      console.error(e);
+    }
   };
+
+  if (loading) return <PageLoader label="Loading complaints..." />;
 
   return (
     <div className="page-enter">
+      <ApiError error={error} />
       <SectionHeader
         title="Complaint Management"
         btn={role === 'admin' ? null : 'Register Complaint'}
@@ -65,7 +79,7 @@ export default function Complaints({ role, user }) {
                   style={{ width: '100%', padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: 'none' }}
                 >
                   <option value="">Select product...</option>
-                  {PRODUCTS.map(p => (
+                  {products.map(p => (
                     <option key={p.id} value={p.name}>{p.name}</option>
                   ))}
                 </select>

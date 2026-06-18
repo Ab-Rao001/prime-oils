@@ -1,3 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+:root {
+  /* Brand Tokens (CANOLIVE Theme) */
+  --primary-green: #0d2a14;
+  --primary-green-light: #1e4627;
+  --accent-gold: #d4880a;
+  --accent-gold-light: #f5c842;
+  --accent-gold-bg: rgba(245, 200, 66, 0.09);
+  --accent-gold-border: rgba(245, 200, 66, 0.2);
+  
+  /* Neutral Color Tokens */
+  --bg-light: #f4f7f5;
+  --card-bg: #ffffff;
+  --text-primary: #111e14;
+  --text-muted: #536958;
+  --border-light: #d8e2da;
+  
+  /* Semantic Tokens */
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-info: #2563eb;
+  --color-info-bg: #eff6ff;
+
+  /* Elevation & Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(13, 42, 20, 0.05), 0 2px 4px -1px rgba(13, 42, 20, 0.03);
+  --shadow-lg: 0 10px 25px -5px rgba(13, 42, 20, 0.08), 0 8px 10px -6px rgba(13, 42, 20, 0.04);
+  
+  /* Layout Transitions */
+  --transition-speed: 0.28s;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  --border-radius: 12px;
+}
+
 *,
 *::before,
 *::after {
@@ -8,58 +47,153 @@
 
 body {
   font-family: 'DM Sans', sans-serif;
-  background: #E8F5E9;
-  color: #1A2E1F;
+  background-color: var(--bg-light);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
 
-::-webkit-scrollbar        { width: 5px; height: 5px; }
-::-webkit-scrollbar-track  { background: transparent; }
-::-webkit-scrollbar-thumb  { background: #4A6B4A55; border-radius: 3px; }
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(13, 42, 20, 0.15);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(13, 42, 20, 0.3);
+}
 
+/* Keyframes & Animations */
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Sidebar nav button hover */
-.nav-btn:hover {
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: rgba(253, 246, 227, 0.75) !important;
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
-.nav-btn.active {
-  background: rgba(212, 136, 10, 0.15) !important;
-  color: #F5C842 !important;
-}
-
-/* Table row hover */
-.table-row:hover td {
-  background: #E8F5E9;
-}
-
-/* Sidebar transition */
-.sidebar {
-  transition: width 0.28s ease, min-width 0.28s ease;
-}
-
-/* Fade animations for page content */
 .page-enter {
-  animation: slideUp 0.25s ease both;
+  animation: slideUp 0.3s var(--transition-timing) both;
 }
 
-/* Hide YouTube branding and UI elements */
-iframe[src*="youtube"] {
-  filter: brightness(1) contrast(1);
+/* Focus Indicator for Accessibility */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
 }
 
-/* Ensure video covers entire screen without black bars */
-.video-background-wrapper {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+
+/* Screen Reader Only Utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  z-index: 0;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Responsive Grid layouts */
+.grid-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* Premium Card Designs */
+.card-premium {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-speed) var(--transition-timing),
+              transform var(--transition-speed) var(--transition-timing);
+}
+.card-premium:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Responsive Table Wrapper */
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Shimmer Loading Elements */
+.shimmer-bg {
+  background: linear-gradient(90deg, #f0f3f1 25%, #e2e8e4 50%, #f0f3f1 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Responsive Sidebar Drawer styling */
+.sidebar {
+  transition: transform var(--transition-speed) var(--transition-timing),
+              width var(--transition-speed) var(--transition-timing);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 1000;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(13, 42, 20, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+    animation: fadeIn 0.2s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

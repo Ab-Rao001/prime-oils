@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { auth, db } from '../Firebase/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { setDoc, doc } from 'firebase/firestore';
-import { getAuthErrorMessage, validateEmail, validatePassword } from '../Firebase/authUtils';
+import { useAuth } from '../hooks/useAuth';
+const SUPER_ADMIN_EMAIL = 'admin@primeoil.com';
+const isSuperAdminEmail = (email) => email === SUPER_ADMIN_EMAIL;
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 import ForgotPassword from './ForgotPassword';
 
-export default function Auth({ defaultTab = 'login' }) {
+export default function Auth({ defaultTab = 'login', onBack }) {
+  const { login, signup } = useAuth();
   const [tab, setTab] = useState(defaultTab);
   const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
   const [error, setError] = useState('');
@@ -66,6 +67,15 @@ export default function Auth({ defaultTab = 'login' }) {
         backdropFilter: 'blur(10px)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
       }}>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            style={{ background: 'none', border: 'none', color: 'rgba(245,200,66,0.8)', cursor: 'pointer', fontSize: 13, marginBottom: 12, padding: 0 }}
+          >
+            ← Back
+          </button>
+        )}
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
@@ -335,10 +345,10 @@ export default function Auth({ defaultTab = 'login' }) {
     setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await login(email, password);
       setForm({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
     } catch (err) {
-      setError(getAuthErrorMessage(err.code));
+      setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -355,33 +365,30 @@ export default function Auth({ defaultTab = 'login' }) {
     if (!validateEmail(email)) return setError('Please enter a valid email.');
     if (!password) return setError('Please enter a password.');
 
-    const passwordValidation = validatePassword(password);
-    if (!passwordValidation.isValid) {
-      return setError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      return setError('Password must be at least 8 characters.');
     }
 
     if (password !== confirmPassword) return setError('Passwords do not match.');
+
+    if (isSuperAdminEmail(email)) {
+      return setError(`This email is reserved for the super admin. Contact ${SUPER_ADMIN_EMAIL}.`);
+    }
+
+    if (form.role === 'admin') {
+      return setError('Admin accounts cannot be created via signup.');
+    }
 
     setLoading(true);
     setError('');
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      await setDoc(doc(db, 'users', user.uid), {
-        name,
-        email,
-        role: form.role,
-        status: 'active',
-        createdAt: new Date(),
-      });
-
+      await signup(name, email, password, confirmPassword, form.role);
       setForm({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
       setTab('login');
       setError('');
     } catch (err) {
-      setError(getAuthErrorMessage(err.code));
+      setError(err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

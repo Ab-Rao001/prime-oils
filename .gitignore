@@ -1,0 +1,9 @@
+node_modules/
+build/
+dist/
+.env
+.env.local
+server/.env
+server/.tmp-product-images/
+.DS_Store
+node_modules

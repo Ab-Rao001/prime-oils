@@ -1,6 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-export default function Landing({ onStart, onSetup }) {
+export default function Landing() {
+  const navigate = useNavigate();
+
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
       {/* SECTION 1: Image hero (first screen) */}
@@ -58,7 +61,7 @@ export default function Landing({ onStart, onSetup }) {
           justifyContent: 'flex-end',
         }}>
           <button
-            onClick={() => onStart('login')}
+            onClick={() => navigate('/auth')}
             style={{
               padding: '10px 26px',
               borderRadius: 999,
@@ -75,7 +78,7 @@ export default function Landing({ onStart, onSetup }) {
             Login
           </button>
           <button
-            onClick={() => onStart('signup')}
+            onClick={() => navigate('/auth')}
             style={{
               padding: '10px 26px',
               borderRadius: 999,
