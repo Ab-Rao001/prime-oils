@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { resetPassword } from '../Firebase/authUtils';
-import { validateEmail } from '../Firebase/authUtils';
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 export default function ForgotPassword({ onBack }) {
   const [email, setEmail] = useState('');
@@ -50,19 +49,11 @@ export default function ForgotPassword({ onBack }) {
     setMessage('');
     setMessageType('');
 
-    const result = await resetPassword(trimmedEmail);
-
-    if (result.success) {
-      setMessageType('success');
-      setMessage('✓ Password reset email sent! Check your inbox and follow the link.');
-      setEmail('');
-      setTimeout(() => onBack?.(), 3000);
-    } else {
+    setTimeout(() => {
       setMessageType('error');
-      setMessage(result.error);
-    }
-
-    setLoading(false);
+      setMessage('Self-service password reset is currently unavailable. Please contact an administrator.');
+      setLoading(false);
+    }, 1000);
   };
 
   return (

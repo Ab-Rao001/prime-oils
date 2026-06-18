@@ -1,7 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { auth, db } from '../Firebase/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { getDoc, doc, setDoc } from 'firebase/firestore';
+import { api, loginLocal, signupLocal } from '../api/client';
 
 export const AuthContext = createContext();
 
@@ -12,80 +10,66 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const fetchUser = async () => {
       try {
-        if (currentUser) {
-          // Fetch user role from Firestore
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          let userData = null;
-          let roleToAssign = 'user';
-
-          try {
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-              // User exists in Firestore
-              userData = userDocSnap.data();
-              roleToAssign = userData.role || 'user';
-            } else {
-              // Determine role for new user
-              if (currentUser.email === 'admin@primeoil.com') {
-                roleToAssign = 'admin';
-              }
-              userData = null;
-            }
-          } catch (firestoreError) {
-            // Even if Firestore fails, still log in the user
-            if (currentUser.email === 'admin@primeoil.com') {
-              roleToAssign = 'admin';
-            }
-            userData = null;
-          }
-
-          // Always set user, even if Firestore failed
-          setUser({
-            id: currentUser.uid,
-            email: currentUser.email,
-            name: userData?.name || currentUser.displayName || '',
-            displayName: currentUser.displayName,
-          });
-          setUserRole(roleToAssign);
-
-          // Try to auto-create Firestore document if it doesn't exist
-          if (!userData) {
-            try {
-              await setDoc(userDocRef, {
-                name: currentUser.displayName || '',
-                email: currentUser.email,
-                role: roleToAssign,
-                status: 'active',
-                createdAt: new Date(),
-              });
-            } catch (firestoreWriteError) {
-              // Silently ignore - user is still logged in
-            }
-          }
-        } else {
-          setUser(null);
-          setUserRole(null);
+        const res = await api.getMe();
+        if (res.success && res.user) {
+          setUser(res.user);
+          setUserRole(res.user.role);
+          localStorage.setItem('user', JSON.stringify(res.user));
         }
       } catch (err) {
-        console.error('❌ Auth error:', err.code);
-        setError(err.message);
+        setUser(null);
+        setUserRole(null);
+        localStorage.removeItem('user');
       } finally {
         setLoading(false);
       }
-    });
-
-    return unsubscribe;
+    };
+    fetchUser();
   }, []);
 
-  const value = {
-    user,
-    userRole,
-    loading,
-    error,
-    isAuthenticated: !!user,
+  const login = async (email, password) => {
+    setError('');
+    try {
+      const data = await loginLocal(email, password);
+      setUser(data.user);
+      setUserRole(data.user.role);
+      return data.user;
+    } catch (err) {
+      setError(err.message || 'Login failed');
+      throw err;
+    }
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const signup = async (name, email, password, confirmPassword, role) => {
+    setError('');
+    try {
+      const data = await signupLocal(name, email, password, confirmPassword, role);
+      setUser(data.user);
+      setUserRole(data.user.role);
+      return data.user;
+    } catch (err) {
+      setError(err.message || 'Signup failed');
+      throw err;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch (e) {
+      console.error('Logout failed on backend:', e);
+    }
+    localStorage.removeItem('user');
+    setUser(null);
+    setUserRole(null);
+    setError('');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, userRole, loading, error, setError, isAuthenticated: !!user, login, signup, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };

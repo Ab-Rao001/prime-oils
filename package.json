@@ -3,18 +3,25 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "firebase": "^12.11.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
+    "react-error-boundary": "^6.1.2",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.18.0",
     "recharts": "^2.12.7"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "server": "npm run dev --prefix server",
+    "server:seed": "npm run seed --prefix server",
+    "test": "npm test --prefix server",
+    "dev": "concurrently \"npm run server\" \"npm start\""
   },
+  "proxy": "http://localhost:5000",
   "devDependencies": {
-    "react-scripts": "^5.0.0"
+    "concurrently": "^9.1.2",
+    "react-scripts": "5.0.1"
   },
   "browserslist": {
     "production": [

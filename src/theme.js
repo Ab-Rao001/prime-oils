@@ -1,16 +1,13 @@
-// ─── Design Tokens ───────────────────────────────────────────────────────────
 const C = {
-  // Sidebar
+
   sb:        '#0D2A14',
   sbBorder:  'rgba(245,200,66,0.14)',
 
-  // Brand gold (CANOLIVE theme)
   gold:       '#D4880A',
   goldL:      '#F5C842',
   goldBg:     'rgba(245,200,66,0.09)',
   goldBorder: 'rgba(245,200,66,0.28)',
 
-  // Base (Green theme matching CANOLIVE)
   bg:     '#E8F5E9',
   card:   '#FFFFFF',
   text:   '#1A2E1F',
@@ -26,7 +23,6 @@ const C = {
 
 export default C;
 
-// Badge color map
 export const BADGE_COLORS = {
   active:       { bg: C.sBg,       c: C.success  },
   delivered:    { bg: C.sBg,       c: C.success  },

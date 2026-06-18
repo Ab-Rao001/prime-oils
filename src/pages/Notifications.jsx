@@ -1,6 +1,7 @@
 import React from 'react';
 import C from '../theme';
 import Badge from '../components/Badge';
+import { api } from '../api/client';
 
 const ICONS = { payment: '💳', order: '🛒', stock: '📦', complaint: '⚠️', delivery: '🚚' };
 const COLS  = { payment: C.warn, order: C.info, stock: C.danger, complaint: C.danger, delivery: C.success };
@@ -18,11 +19,21 @@ export default function Notifications({ role, user, notifications = [], setNotif
 
   const visible = notifications.filter(isVisible);
 
-  const markRead = id =>
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const markRead = async id => {
+    try {
+      await api.markNotificationRead(id);
+    } catch { /* local fallback */ }
+    setNotifs(prev => prev.map(n => (n.id === id || n._id === id ? { ...n, read: true } : n)));
+  };
 
-  const markAll = () =>
-    setNotifs(prev => prev.map(n => (isVisible(n) ? { ...n, read: true } : n)));
+  const markAll = async () => {
+    try {
+      const updated = await api.markAllNotificationsRead();
+      setNotifs(updated);
+    } catch {
+      setNotifs(prev => prev.map(n => (isVisible(n) ? { ...n, read: true } : n)));
+    }
+  };
 
   const unread = visible.filter(n => !n.read).length;
 
