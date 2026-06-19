@@ -5,11 +5,12 @@ import SectionHeader from '../components/SectionHeader';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
 import { useFetch } from '../hooks/useFetch';
-import { api } from '../api/client';
+import { userApi } from '../api/userApi';
+import { inventoryApi } from '../api/inventoryApi';
 
 export default function Complaints({ role, user }) {
-  const { data: cmps, setData: setCmps, loading, error } = useFetch(() => api.getComplaints(), []);
-  const { data: products } = useFetch(() => api.getProducts(), []);
+  const { data: cmps, setData: setCmps, loading, error } = useFetch(() => userApi.getComplaints(), []);
+  const { data: products } = useFetch(() => inventoryApi.getProducts(), []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ product: '', type: 'damaged', issue: '' });
 
@@ -20,7 +21,7 @@ export default function Complaints({ role, user }) {
 
   const update = async (id, status) => {
     try {
-      const updated = await api.updateComplaint(id, { status });
+      const updated = await userApi.updateComplaint(id, { status });
       setCmps(prev => prev.map(c => c.id === id ? updated : c));
     } catch {
       setCmps(prev => prev.map(c => c.id === id ? { ...c, status } : c));
@@ -38,7 +39,7 @@ export default function Complaints({ role, user }) {
     const date = d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).split(',')[0];
 
     try {
-      const created = await api.createComplaint({
+      const created = await userApi.createComplaint({
         shop: user?.name || 'Unknown Shop',
         product: form.product,
         issue: form.issue,
@@ -143,9 +144,9 @@ export default function Complaints({ role, user }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{c.id}</span>
-                  <Badge s={c.type} />
-                  <Badge s={c.status} />
+                  <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{c.id || 'CMP-###'}</span>
+                  <Badge s={c.type || 'unknown'} />
+                  <Badge s={c.status || 'unknown'} />
                 </div>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 2 }}>Shop: <span style={{ color: C.text, fontWeight: 500 }}>{c.shop}</span></div>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 2 }}>Product: <span style={{ color: C.text }}>{c.product}</span></div>

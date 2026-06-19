@@ -29,7 +29,7 @@ router.get('/:key', catchAsync(async (req, res) => {
     }
 
     const data = await Order.aggregate([
-      { $match: scope.orderMatch },
+      { $match: { ...scope.orderMatch, isDeleted: { $ne: true } } },
       {
         $group: {
           _id: { $dateToString: { format: '%b', date: '$createdAt' } },
@@ -59,7 +59,7 @@ router.get('/:key', catchAsync(async (req, res) => {
       }
 
       const data = await Product.aggregate([
-        { $match: { isActive: true } },
+        { $match: { isActive: true, isDeleted: { $ne: true } } },
         { $group: { _id: '$cat', v: { $sum: 1 } } },
         { $sort: { v: -1 } },
         {
@@ -80,7 +80,7 @@ router.get('/:key', catchAsync(async (req, res) => {
     }
 
     const data = await Order.aggregate([
-      { $match: scope.orderMatch },
+      { $match: { ...scope.orderMatch, isDeleted: { $ne: true } } },
       {
         $lookup: {
           from: 'shopkeepers',

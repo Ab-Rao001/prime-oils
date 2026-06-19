@@ -6,7 +6,7 @@ import SearchBar from '../components/SearchBar';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
 import { THead, TRow, TCell } from '../components/Table';
-import { api } from '../api/client';
+import { userApi } from '../api/userApi';
 
 const ALL_ROLES = ['admin', 'shopkeeper', 'salesman', 'supplier'];
 
@@ -66,10 +66,11 @@ export default function UserManagement() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'shopkeeper' });
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', password: '', role: 'shopkeeper' });
   const [inviting, setInviting] = useState(false);
   const [actionId, setActionId] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [viewActivityUser, setViewActivityUser] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -80,7 +81,7 @@ export default function UserManagement() {
     setLoading(true);
     setError(null);
     try {
-      const list = await api.getUsers();
+      const list = await userApi.getUsers();
       setUsers(list);
     } catch (e) {
       setError(e.message || 'Failed to load users');
@@ -106,19 +107,19 @@ export default function UserManagement() {
   }, [users, search, roleFilter]);
 
   const handleInvite = async () => {
-    const { name, email, role } = inviteForm;
-    if (!name.trim() || !email.trim()) {
-      showToast('Name and email are required', 'error');
+    const { name, email, password, role } = inviteForm;
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      showToast('Name, email, and password are required', 'error');
       return;
     }
 
     setInviting(true);
     try {
-      const res = await api.createUser({ name: name.trim(), email: email.trim(), role });
+      const res = await userApi.createUser({ name: name.trim(), email: email.trim(), password: password.trim(), role });
       setUsers(prev => [res.data, ...prev]);
       setShowInvite(false);
-      setInviteForm({ name: '', email: '', role: 'shopkeeper' });
-      showToast(res.message || 'Invite sent successfully');
+      setInviteForm({ name: '', email: '', password: '', role: 'shopkeeper' });
+      showToast(res.message || 'User created successfully');
     } catch (e) {
       showToast(e.message || 'Failed to invite user', 'error');
     } finally {
@@ -130,7 +131,7 @@ export default function UserManagement() {
     if (user.role === newRole || user.isSuperAdmin) return;
     setActionId(user.id);
     try {
-      const res = await api.updateUserRole(user.id, newRole);
+      const res = await userApi.updateUserRole(user.id, newRole);
       setUsers(prev => prev.map(u => (u.id === user.id ? res.data : u)));
       showToast(`Role updated to ${newRole}`);
     } catch (e) {
@@ -140,23 +141,23 @@ export default function UserManagement() {
     }
   };
 
-  const handleDisable = async user => {
+  const handleDelete = async user => {
     if (user.isSuperAdmin) {
-      showToast('Super admin cannot be disabled', 'error');
+      showToast('Super admin cannot be deleted', 'error');
       return;
     }
     const confirmed = window.confirm(
-      `Disable ${user.name}? They will be marked inactive and unable to login.`
+      `Permanently delete ${user.name}? This action cannot be undone.`
     );
     if (!confirmed) return;
 
     setActionId(user.id);
     try {
-      const res = await api.disableUser(user.id);
-      setUsers(prev => prev.map(u => (u.id === user.id ? res.data : u)));
-      showToast(res.message || 'User disabled');
+      const res = await userApi.disableUser(user.id); // Reusing the same endpoint
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+      showToast(res.message || 'User permanently deleted');
     } catch (e) {
-      showToast(e.message || 'Failed to disable user', 'error');
+      showToast(e.message || 'Failed to delete user', 'error');
     } finally {
       setActionId(null);
     }
@@ -165,7 +166,7 @@ export default function UserManagement() {
   const handleResetPassword = async user => {
     setActionId(`reset-${user.id}`);
     try {
-      const res = await api.resetUserPassword(user.id);
+      const res = await userApi.resetUserPassword(user.id);
       showToast(res.message || 'Password reset email sent');
     } catch (e) {
       showToast(e.message || 'Failed to send reset email', 'error');
@@ -193,7 +194,7 @@ export default function UserManagement() {
     <div className="page-enter">
       <SectionHeader
         title="User Management"
-        btn="Invite User"
+        btn="Create User"
         onBtn={() => {
           setShowInvite(true);
           setError(null);
@@ -201,7 +202,7 @@ export default function UserManagement() {
       />
 
       <p style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
-        Manage Prime Oil staff. Invites send a password-setup email.
+        Manage Prime Oil staff and control system access.
       </p>
 
       <ApiError error={error} />
@@ -259,7 +260,7 @@ export default function UserManagement() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 16 }}>
-              Invite User
+              Create User
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
@@ -281,6 +282,16 @@ export default function UserManagement() {
                 />
               </div>
               <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Password</label>
+                <input
+                  type="password"
+                  value={inviteForm.password}
+                  onChange={e => setInviteForm({ ...inviteForm, password: e.target.value })}
+                  style={inputStyle}
+                  placeholder="Minimum 6 characters"
+                />
+              </div>
+              <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Role</label>
                 <select
                   value={inviteForm.role}
@@ -296,7 +307,7 @@ export default function UserManagement() {
               </div>
             </div>
             <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>
-              A password setup email will be sent to this address.
+              The user can log in immediately with the password provided.
             </p>
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button
@@ -314,7 +325,7 @@ export default function UserManagement() {
                   cursor: inviting ? 'not-allowed' : 'pointer',
                 }}
               >
-                {inviting ? 'Sending invite…' : 'Send invite'}
+                {inviting ? 'Creating user…' : 'Create user'}
               </button>
               <button
                 type="button"
@@ -330,6 +341,66 @@ export default function UserManagement() {
                 }}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewActivityUser && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20,
+          }}
+          onClick={() => setViewActivityUser(null)}
+        >
+          <div
+            style={{
+              background: C.card, borderRadius: 14, padding: 24, width: '100%', maxWidth: 500,
+              border: `1px solid ${C.border}`, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.15)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 16 }}>
+              Login Activity for {viewActivityUser.name}
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+              {viewActivityUser.loginHistory?.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {viewActivityUser.loginHistory.slice().reverse().map((log, i) => (
+                    <div key={i} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{new Date(log.time).toLocaleString()}</span>
+                        <Badge s={log.status || 'success'} />
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted }}>IP: {log.ip || 'Unknown'}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: 20, textAlign: 'center', color: C.muted, fontSize: 13 }}>
+                  No recent login activity found.
+                </div>
+              )}
+            </div>
+            <div style={{ marginTop: 20, textAlign: 'right' }}>
+              <button 
+                onClick={() => setViewActivityUser(null)} 
+                style={{ 
+                  padding: '10px 24px', 
+                  background: C.gold, 
+                  border: 'none', 
+                  borderRadius: 8, 
+                  color: '#fff', 
+                  cursor: 'pointer', 
+                  fontWeight: 600,
+                  transition: 'background 0.2s',
+                  boxShadow: '0 4px 12px rgba(212, 136, 10, 0.2)'
+                }}
+              >
+                Close
               </button>
             </div>
           </div>
@@ -414,21 +485,32 @@ export default function UserManagement() {
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => handleDisable(u)}
+                            onClick={() => handleDelete(u)}
                             style={{
                               padding: '5px 10px',
                               fontSize: 11,
-                              fontWeight: 600,
+                              fontWeight: 700,
                               borderRadius: 6,
-                              border: 'none',
-                              background: C.dBg,
-                              color: C.danger,
+                              border: `1px solid ${C.danger}`,
+                              background: C.danger,
+                              color: '#fff',
                               cursor: busy ? 'not-allowed' : 'pointer',
+                              boxShadow: '0 2px 4px rgba(220, 38, 38, 0.2)'
                             }}
                           >
-                            Disable
+                            Delete
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setViewActivityUser(u)}
+                          style={{
+                            padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6,
+                            border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: 'pointer',
+                          }}
+                        >
+                          Activity
+                        </button>
                       </div>
                     </td>
                   </TRow>

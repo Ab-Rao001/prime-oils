@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
   /* Brand Tokens (CANOLIVE Theme) */
@@ -26,6 +26,53 @@
   --color-info: #2563eb;
   --color-info-bg: #eff6ff;
 
+  /* Theme mappings for theme.js (Light Mode) */
+  --color-sb: var(--primary-green);
+  --color-sbBorder: var(--primary-green-light);
+  --color-gold: var(--accent-gold);
+  --color-goldL: var(--accent-gold-light);
+  --color-goldBg: var(--accent-gold-bg);
+  --color-goldBorder: var(--accent-gold-border);
+  --color-bg: var(--bg-light);
+  --color-card: var(--card-bg);
+  --color-text: var(--text-primary);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border-light);
+  
+  --color-sBg: var(--color-success-bg);
+  --color-dBg: var(--color-danger-bg);
+  --color-wBg: var(--color-warning-bg);
+  --color-iBg: var(--color-info-bg);
+}
+
+.dark {
+  /* Neutral Color Tokens override for Dark Mode */
+  --bg-light: #0d2a14;
+  --card-bg: #111e14;
+  --text-primary: #fdf6e3;
+  --text-muted: rgba(253,246,227,0.6);
+  --border-light: rgba(255,255,255,0.1);
+
+  /* Theme mappings for theme.js (Dark Mode) */
+  --color-sb: #0a170d;
+  --color-sbBorder: rgba(255,255,255,0.05);
+  --color-gold: var(--accent-gold-light);
+  --color-goldL: #ffeb99;
+  --color-goldBg: rgba(245, 200, 66, 0.15);
+  --color-goldBorder: rgba(245, 200, 66, 0.3);
+  --color-bg: var(--bg-light);
+  --color-card: var(--card-bg);
+  --color-text: var(--text-primary);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border-light);
+  
+  --color-sBg: rgba(22, 163, 74, 0.15);
+  --color-dBg: rgba(220, 38, 38, 0.15);
+  --color-wBg: rgba(217, 119, 6, 0.15);
+  --color-iBg: rgba(37, 99, 235, 0.15);
+}
+
+:root {
   /* Elevation & Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 12px -2px rgba(13, 42, 20, 0.05), 0 2px 4px -1px rgba(13, 42, 20, 0.03);
@@ -46,12 +93,14 @@
 }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   background-color: var(--bg-light);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
+  margin: 0;
+  padding: 0;
 }
 
 /* Custom Scrollbars */

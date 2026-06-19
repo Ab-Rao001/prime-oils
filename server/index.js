@@ -1,3 +1,4 @@
+// Trigger restart
 import config from './config/env.js';
 import express from 'express';
 import cors from 'cors';
@@ -8,8 +9,12 @@ import mongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 
+import http from 'http';
 import { connectDB } from './config/db.js';
+import { initIO } from './utils/socket.js';
 import productsRouter from './routes/products.js';
+import purchaseOrdersRouter from './routes/purchaseOrders.js';
+import dispatchesRouter from './routes/dispatches.js';
 import ordersRouter from './routes/orders.js';
 import paymentsRouter from './routes/payments.js';
 import shopkeepersRouter from './routes/shopkeepers.js';
@@ -20,6 +25,14 @@ import chartsRouter from './routes/charts.js';
 import reportsRouter from './routes/reports.js';
 import usersRouter from './routes/users.js';
 import authRouter from './routes/auth.js';
+import transactionsRouter from './routes/transactions.js';
+import analyticsRouter from './routes/analytics.js';
+import approvalsRouter from './routes/approvals.js';
+import dispatchRouter from './routes/dispatch.js';
+import expensesRouter from './routes/expenses.js';
+import returnsRouter from './routes/returns.js';
+import transfersRouter from './routes/transfers.js';
+import vehiclesRouter from './routes/vehicles.js';
 import logger from './utils/logger.js';
 import requestLogger from './middleware/requestLogger.js';
 import AppError from './utils/AppError.js';
@@ -167,9 +180,19 @@ app.use('/api/shopkeepers', shopkeepersRouter);
 app.use('/api/complaints', complaintsRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/purchaseOrders', purchaseOrdersRouter);
+app.use('/api/dispatches', dispatchesRouter);
 app.use('/api/charts', chartsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/transactions', transactionsRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/approvals', approvalsRouter);
+app.use('/api/dispatch', dispatchRouter);
+app.use('/api/expenses', expensesRouter);
+app.use('/api/returns', returnsRouter);
+app.use('/api/transfers', transfersRouter);
+app.use('/api/vehicles', vehiclesRouter);
 
 // 404 Handler - Forward to global error handler
 app.use((req, res, next) => {
@@ -181,7 +204,16 @@ app.use(errorHandler);
 
 async function start() {
   await connectDB();
-  app.listen(PORT, () => logger.info(`API running on http://localhost:${PORT}`));
+  const httpServer = http.createServer(app);
+  
+  // Initialize Socket.io
+  const allowedOriginsList = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : ['http://localhost:3000', 'http://localhost:5173'];
+  
+  initIO(httpServer, allowedOriginsList);
+  
+  httpServer.listen(PORT, () => logger.info(`API and Socket.IO running on http://localhost:${PORT}`));
 }
 
 if (process.env.NODE_ENV !== 'test') {

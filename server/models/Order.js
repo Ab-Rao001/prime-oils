@@ -10,17 +10,30 @@ const orderSchema = new mongoose.Schema({
       productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
       productName: String,
       quantity: { type: Number, default: 0 },
+      unitCost: { type: Number, default: 0 },
+      totalCost: { type: Number, default: 0 },
     },
   ],
+  totalCogs: { type: Number, default: 0 },
   total: { type: Number, index: true },
-  status: { type: String, default: 'pending', index: true },
+  status: { 
+    type: String, 
+    enum: ['pending', 'pending_approval', 'paid', 'confirmed', 'ready_for_dispatch', 'in_transit', 'partially_delivered', 'delivered', 'return_requested', 'returned', 'cancelled'],
+    default: 'pending', 
+    index: true 
+  },
   date: String,
   pay: { type: String, index: true },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 // Define indexes for scalability
 orderSchema.index({ status: 1, createdAt: -1 }); // Compound index for order dashboard queries
-orderSchema.index({ shop: 1, status: 1 }); // Compound index for customer order history lookup
+orderSchema.index({ shop: 1, status: 1, createdAt: -1 }); // Compound index for customer order history lookup
+orderSchema.index({ man: 1, date: -1 }); // Compound index for salesman daily tracking
+orderSchema.index({ isDeleted: 1 }); // Index for soft deletes filtering
 
 export default mongoose.model('Order', orderSchema);
 

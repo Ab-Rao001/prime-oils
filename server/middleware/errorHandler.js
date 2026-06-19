@@ -49,13 +49,16 @@ export function errorHandler(err, req, res, next) {
   // 3. Construct and send response
   const response = {
     success: false,
-    message: error.message,
-    code: error.code,
+    error: {
+      message: error.message,
+      code: error.code || 'UNKNOWN_ERROR',
+      details: err.details || [],
+    }
   };
 
   // Only expose stack trace in non-production mode
   if (process.env.NODE_ENV !== 'production') {
-    response.stack = err.stack;
+    response.error.stack = err.stack;
   }
 
   res.status(error.statusCode || 500).json(response);

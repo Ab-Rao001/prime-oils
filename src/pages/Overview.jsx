@@ -10,16 +10,20 @@ import { THead, TRow, TCell } from '../components/Table';
 import { PIE_COLORS } from '../config/charts';
 import { sortProductsBySize } from '../config/products';
 import { useFetch } from '../hooks/useFetch';
-import { api } from '../api/client';
+import { orderApi } from '../api/orderApi';
+import { paymentApi } from '../api/paymentApi';
+import { userApi } from '../api/userApi';
+import { inventoryApi } from '../api/inventoryApi';
+import { analyticsApi } from '../api/analyticsApi';
 
 export default function Overview({ role, user, onNavigate }) {
-  const { data: orders, loading: oLoad, error: oErr } = useFetch(() => api.getOrders(), []);
-  const { data: payments, loading: pLoad } = useFetch(() => api.getPayments(), []);
-  const { data: complaints, loading: cLoad } = useFetch(() => api.getComplaints(), []);
-  const { data: products, loading: prLoad } = useFetch(() => api.getProducts(), []);
-  const { data: shopkeepers } = useFetch(() => api.getShopkeepers(), []);
-  const { data: salesChart } = useFetch(() => api.getChart('sales'), []);
-  const { data: categoryChart } = useFetch(() => api.getChart('category'), []);
+  const { data: orders, loading: oLoad, error: oErr } = useFetch(() => orderApi.getOrders(), []);
+  const { data: payments, loading: pLoad } = useFetch(() => paymentApi.getPayments(), []);
+  const { data: complaints, loading: cLoad } = useFetch(() => userApi.getComplaints(), []);
+  const { data: products, loading: prLoad } = useFetch(() => inventoryApi.getProducts(), []);
+  const { data: shopkeepers } = useFetch(() => userApi.getShopkeepers(), []);
+  const { data: salesChart } = useFetch(() => analyticsApi.getChart('sales'), []);
+  const { data: categoryChart } = useFetch(() => analyticsApi.getChart('category'), []);
 
   const loading = oLoad || pLoad || cLoad || prLoad;
   const error = oErr;

@@ -104,9 +104,17 @@ export function formatNotification(doc) {
     id: o.legacyId ?? o._id?.toString(),
     _id: o._id?.toString(),
     type: o.type,
-    msg: o.msg,
-    date: o.date,
-    read: o.read,
+    title: o.title || 'System Notification',
+    msg: o.message || o.msg, // backwards compatible
+    message: o.message || o.msg,
+    date: o.date || o.createdAt,
+    createdAt: o.createdAt,
+    read: o.isRead ?? o.read, // backwards compatible
+    isRead: o.isRead ?? o.read,
+    priority: o.priority || 'MEDIUM',
+    module: o.module,
+    documentId: o.documentId?.toString(),
+    role: o.role
   };
 }
 

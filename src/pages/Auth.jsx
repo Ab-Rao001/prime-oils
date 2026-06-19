@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useLocation, useNavigate } from 'react-router-dom';
 const SUPER_ADMIN_EMAIL = 'admin@primeoil.com';
 const isSuperAdminEmail = (email) => email === SUPER_ADMIN_EMAIL;
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 import ForgotPassword from './ForgotPassword';
+import C from '../theme';
 
 export default function Auth({ defaultTab = 'login', onBack }) {
   const { login, signup } = useAuth();
-  const [tab, setTab] = useState(defaultTab);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState(location.state?.tab || defaultTab);
+
+  useEffect(() => {
+    if (location.state?.tab) {
+      setTab(location.state.tab);
+    }
+  }, [location.state?.tab]);
+
   const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,8 +26,8 @@ export default function Auth({ defaultTab = 'login', onBack }) {
   const inputStyle = {
     width: '100%',
     padding: '12px 14px',
-    background: 'rgba(255,255,255,0.1)',
-    border: '1px solid rgba(245,200,66,0.3)',
+    background: 'rgba(255,255,255,0.08)',
+    border: `1px solid rgba(245,200,66,0.3)`,
     borderRadius: 10,
     color: '#FDF6E3',
     fontSize: 14,
@@ -27,10 +38,7 @@ export default function Auth({ defaultTab = 'login', onBack }) {
 
   const labelStyle = {
     display: 'block',
-    fontSize: 11,
     color: 'rgba(245,200,66,0.9)',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
     marginBottom: 8,
     fontWeight: 600,
   };
@@ -38,7 +46,7 @@ export default function Auth({ defaultTab = 'login', onBack }) {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #2D4A2D 0%, #4A6B4A 50%, #6B8E6B 100%)',
+      background: `linear-gradient(135deg, ${C.sb} 0%, ${C.sbBorder} 100%)`,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -58,13 +66,13 @@ export default function Auth({ defaultTab = 'login', onBack }) {
       <div style={{
         width: '100%',
         maxWidth: 480,
-        background: 'linear-gradient(145deg, rgba(45, 74, 45, 0.92), rgba(34, 68, 34, 0.92))',
-        border: '1px solid rgba(245,200,66,0.3)',
+        background: 'rgba(13, 42, 20, 0.85)',
+        backdropFilter: 'blur(10px)',
+        border: `1px solid ${C.goldBorder}`,
         borderRadius: 16,
         padding: '2.8rem 2.5rem',
         position: 'relative',
         zIndex: 1,
-        backdropFilter: 'blur(10px)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
       }}>
         {onBack && (
@@ -163,14 +171,14 @@ export default function Auth({ defaultTab = 'login', onBack }) {
               style={{
                 width: '100%',
                 padding: '12px',
-                background: loading ? 'rgba(150,150,150,0.6)' : '#F5C842',
-                color: '#0D0A05',
+                background: loading ? C.muted : C.gold,
+                color: '#fff',
                 border: 'none',
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 700,
                 cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 14px rgba(245,200,66,0.3)',
+                boxShadow: `0 4px 14px ${C.goldBorder}`,
                 transition: 'all 0.3s',
                 marginBottom: error ? 12 : 16,
               }}
@@ -278,9 +286,9 @@ export default function Auth({ defaultTab = 'login', onBack }) {
                   cursor: 'pointer',
                 }}
               >
-                <option value="shopkeeper">Shopkeeper</option>
-                <option value="salesman">Salesman</option>
-                <option value="supplier">Supplier</option>
+                <option value="shopkeeper" style={{ color: '#FDF6E3', background: '#2D4A2D' }}>Shopkeeper</option>
+                <option value="salesman" style={{ color: '#FDF6E3', background: '#2D4A2D' }}>Salesman</option>
+                <option value="supplier" style={{ color: '#FDF6E3', background: '#2D4A2D' }}>Supplier</option>
               </select>
             </div>
 
@@ -345,8 +353,9 @@ export default function Auth({ defaultTab = 'login', onBack }) {
     setError('');
 
     try {
-      await login(email, password);
+      const user = await login(email, password);
       setForm({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
+      navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {

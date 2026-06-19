@@ -11,10 +11,61 @@ const isSuperAdminEmail = (email) => {
   return String(email).toLowerCase() === (process.env.SUPER_ADMIN_EMAIL || 'admin@primeoil.com').toLowerCase();
 };
 import { createUserSchema, updateUserRoleSchema } from '../validators/user.validator.js';
+import { auth, isFirebaseInitialized } from '../config/firebase.js';
+import { handleProductImageUpload } from '../middleware/uploadProductImage.js';
+import { uploadImageBuffer, destroyImage } from '../utils/cloudinaryUpload.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+router.put('/profile', catchAsync(async (req, res) => {
+  const user = await User.findById(req.user.id);
+  if (!user) throw AppError.notFound('User not found');
+
+  const { name, phone, address } = req.body;
+  if (name) user.name = name;
+  if (phone !== undefined) user.phone = phone;
+  if (address !== undefined) user.address = address;
+
+  await user.save();
+
+  res.json({ success: true, data: user.toPublic(), message: 'Profile updated' });
+}));
+
+router.post('/profile/avatar', handleProductImageUpload, catchAsync(async (req, res) => {
+  const user = await User.findById(req.user.id);
+  if (!user) throw AppError.notFound('User not found');
+
+  if (user.cloudinaryPublicId) {
+    try {
+      await destroyImage(user.cloudinaryPublicId);
+    } catch (e) {
+      console.warn('Failed to destroy old avatar image:', e.message);
+    }
+  }
+
+  const result = await uploadImageBuffer(req.file.buffer, {
+    public_id: `avatar-${user._id}`,
+    folder: 'avatars',
+    overwrite: true,
+  });
+
+  user.avatarUrl = result.secure_url;
+  user.cloudinaryPublicId = result.public_id;
+  await user.save();
+
+  res.json({ success: true, data: user.toPublic(), message: 'Avatar updated successfully' });
+}));
+
+router.get('/salesmen', catchAsync(async (req, res) => {
+  const salesmen = await User.find({ role: 'salesman', active: { $ne: false }, isDeleted: { $ne: true } }).select('name').lean();
+  res.json({
+    success: true,
+    data: salesmen.map(s => ({ id: s._id.toString(), name: s.name }))
+  });
+}));
+
 router.use(authorize('admin'));
 
 router.get('/', catchAsync(async (req, res) => {
@@ -22,7 +73,7 @@ router.get('/', catchAsync(async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
 
   if (req.query.page || req.query.limit) {
-    const paginatedResult = await paginate(User, {}, {
+    const paginatedResult = await paginate(User, { isDeleted: { $ne: true } }, {
       page,
       limit,
       sort: { createdAt: -1 },
@@ -49,12 +100,13 @@ router.get('/', catchAsync(async (req, res) => {
           createdAt: u.createdAt,
           joinedDate: u.createdAt,
           lastLogin: u.lastLogin,
+          loginHistory: u.loginHistory || [],
           isSuperAdmin: isSuperAdminEmail(u.email),
         })),
       }
     });
   } else {
-    const users = await User.find()
+    const users = await User.find({ isDeleted: { $ne: true } })
       .select('-password')
       .sort({ createdAt: -1 })
       .lean();
@@ -71,6 +123,7 @@ router.get('/', catchAsync(async (req, res) => {
         createdAt: u.createdAt,
         joinedDate: u.createdAt,
         lastLogin: u.lastLogin,
+        loginHistory: u.loginHistory || [],
         isSuperAdmin: isSuperAdminEmail(u.email),
       })),
     });
@@ -78,7 +131,7 @@ router.get('/', catchAsync(async (req, res) => {
 }));
 
 router.post('/', validate(createUserSchema), catchAsync(async (req, res) => {
-  const { name, email, role } = req.validatedBody;
+  const { name, email, password, role } = req.validatedBody;
   const emailNorm = email.toLowerCase();
 
   if (isSuperAdminEmail(emailNorm)) {
@@ -90,24 +143,35 @@ router.post('/', validate(createUserSchema), catchAsync(async (req, res) => {
     throw AppError.validation('Email is already registered');
   }
 
-  const tempPassword = crypto.randomBytes(24).toString('base64url');
   const user = await User.create({
     name,
     email: emailNorm,
     role,
-    password: tempPassword,
+    password,
     status: 'active',
     active: true,
   });
 
-  const resetToken = user.createPasswordResetToken();
-  await user.save();
+  if (isFirebaseInitialized && auth) {
+    try {
+      const firebaseUser = await auth.createUser({
+        email: emailNorm,
+        password,
+        displayName: name,
+      });
+      user.firebaseUid = firebaseUser.uid;
+      await user.save();
+    } catch (firebaseErr) {
+      // If Firebase fails, rollback MongoDB user creation
+      await User.findByIdAndDelete(user._id);
+      throw AppError.validation('Failed to create user in Firebase: ' + firebaseErr.message);
+    }
+  }
 
   res.status(201).json({
     success: true,
     data: user.toPublic(),
-    invite: { token: resetToken },
-    message: 'User created. Please share the reset token to allow them to set their password.',
+    message: 'User created successfully.',
   });
 }));
 
@@ -141,16 +205,19 @@ router.delete('/:id', catchAsync(async (req, res) => {
     throw AppError.forbidden('You cannot disable your own account');
   }
 
-  // Remove firebase usage
+  if (isFirebaseInitialized && user.firebaseUid && auth) {
+    try {
+      await auth.deleteUser(user.firebaseUid);
+    } catch (firebaseErr) {
+      console.warn('Failed to delete user from Firebase (they might not exist there):', firebaseErr.message);
+    }
+  }
 
-  user.active = false;
-  user.status = 'inactive';
-  await user.save();
+  await User.findByIdAndDelete(req.params.id);
 
   res.json({
     success: true,
-    data: user.toPublic(),
-    message: 'User disabled in Firebase and marked inactive in the database',
+    message: 'User permanently deleted from the database',
   });
 }));
 

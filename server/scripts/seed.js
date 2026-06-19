@@ -19,25 +19,26 @@ import Campaign from '../models/Campaign.js';
 import Notification from '../models/Notification.js';
 import ChartData from '../models/ChartData.js';
 import User from '../models/User.js';
+import Warehouse from '../models/Warehouse.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PRODUCT_IMAGE_MAP = {
-  '1-Ltr-Bott.png': 'Sunflower Oil 1L',
-  '10-Ltr.png': 'Palm Oil 10L',
-  '3-Ltr-Bott-1024x1024.png': 'Olive Oil Extra Virgin',
-  '4.5-Ltr-Bott.png': 'Sufi Cooking Oil',
-  '5x1-Nozzle-Pack.png': 'Dalda Banaspati',
-  '5x1-Pouch-Carton.png': 'Canola Oil 5L',
+  '1-Ltr-Bott.png': 'Canolive Oil 1 Ltr',
+  '16-Ltr.png': 'Canolive Oil 16 Ltr',
+  '3-Ltr-Bott-1024x1024.png': 'Canolive Oil 3 Ltr',
+  '4.5-Ltr-Bott.png': 'Canolive Oil 4.5 Ltr',
+  '5x1-Nozzle-Pack.png': 'Canolive Oil 5×1 Nozzle',
+  '5x1-Pouch-Carton.png': 'Canolive Oil 5×1 Pouch',
 };
 
 const PRODUCTS = [
-  { legacyId: 4, name: 'Sunflower Oil 1L', cat: 'Cooking Oil', size: '1 Ltr', description: 'Sunflower cooking oil — 1 litre bottle', stock: 320, unit: 'Bottle', price: 650, min: 150 },
-  { legacyId: 5, name: 'Olive Oil Extra Virgin', cat: 'Cooking Oil', size: '3 Ltr', description: 'Premium cooking oil — 3 litre bottle', stock: 45, unit: 'Bottle', price: 1885, min: 50 },
-  { legacyId: 1, name: 'Sufi Cooking Oil', cat: 'Cooking Oil', size: '4.5 Ltr', description: 'Sufi cooking oil — 4.5 litre bottle', stock: 450, unit: 'Bottle', price: 2790, min: 100 },
-  { legacyId: 3, name: 'Canola Oil 5L', cat: 'Cooking Oil', size: '5×1 Pouch', description: 'Canola oil — 5×1 litre pouch carton', stock: 95, unit: 'Carton', price: 3150, min: 100 },
-  { legacyId: 2, name: 'Dalda Banaspati', cat: 'Banaspati', size: '5×1 Nozzle', description: 'Dalda banaspati — 5×1 pack with nozzle', stock: 280, unit: 'Pack', price: 3350, min: 80 },
-  { legacyId: 6, name: 'Palm Oil 10L', cat: 'Palm Oil', size: '10 Ltr', description: 'Palm oil — 10 litre tin', stock: 180, unit: 'Tin', price: 6280, min: 60 },
+  { legacyId: 4, name: 'Canolive Oil 1 Ltr', cat: 'Cooking Oil', size: '1 Ltr', description: 'Sunflower cooking oil — 1 litre bottle', stock: 320, unit: 'Bottle', price: 650, min: 150 },
+  { legacyId: 5, name: 'Canolive Oil 3 Ltr', cat: 'Cooking Oil', size: '3 Ltr', description: 'Premium cooking oil — 3 litre bottle', stock: 45, unit: 'Bottle', price: 1885, min: 50 },
+  { legacyId: 1, name: 'Canolive Oil 4.5 Ltr', cat: 'Cooking Oil', size: '4.5 Ltr', description: 'Sufi cooking oil — 4.5 litre bottle', stock: 450, unit: 'Bottle', price: 2790, min: 100 },
+  { legacyId: 3, name: 'Canolive Oil 5×1 Pouch', cat: 'Cooking Oil', size: '5×1 Pouch', description: 'Canola oil — 5×1 litre pouch carton', stock: 95, unit: 'Carton', price: 3150, min: 100 },
+  { legacyId: 2, name: 'Canolive Oil 5×1 Nozzle', cat: 'Banaspati', size: '5×1 Nozzle', description: 'Dalda banaspati — 5×1 pack with nozzle', stock: 280, unit: 'Pack', price: 3350, min: 80 },
+  { legacyId: 6, name: 'Canolive Oil 16 Ltr', cat: 'Palm Oil', size: '16 Ltr', description: 'Palm oil — 16 litre tin', stock: 180, unit: 'Tin', price: 6280, min: 60 },
 ];
 
 const ORDERS = [
@@ -76,6 +77,12 @@ const SHOPKEEPERS = [
   { legacyId: 3, name: 'Pak Kiryana', owner: 'Imran Khan', loc: 'Multan', phone: '0302-3456789', status: 'inactive', credit: 0, total: 95000 },
   { legacyId: 4, name: 'Al-Barkat Store', owner: 'Bilal Ahmed', loc: 'Rawalpindi', phone: '0303-4567890', status: 'active', credit: 78000, total: 420000 },
   { legacyId: 5, name: 'City Mart', owner: 'Farhan Malik', loc: 'Karachi', phone: '0304-5678901', status: 'active', credit: 23000, total: 190000 },
+];
+
+const WAREHOUSES = [
+  { name: 'Main Warehouse', location: 'Faisalabad', type: 'MAIN', status: 'active' },
+  { name: 'Sahiwal Regional Warehouse', location: 'Sahiwal', type: 'REGIONAL', status: 'active' },
+  { name: 'Lahore Regional Warehouse', location: 'Lahore', type: 'REGIONAL', status: 'active' },
 ];
 
 const NOTIFICATIONS = [
@@ -188,6 +195,7 @@ async function clearCollections() {
     Notification.deleteMany({}),
     ChartData.deleteMany({}),
     User.deleteMany({}),
+    Warehouse.deleteMany({}),
   ]);
 }
 
@@ -211,6 +219,9 @@ async function seed() {
   seededShopkeepers.forEach(s => {
     shopkeeperMap[s.name] = s._id;
   });
+
+  console.log('Seeding warehouses...');
+  await Warehouse.insertMany(WAREHOUSES);
 
   console.log('Uploading product images to Cloudinary...');
   const imageMap = await uploadProductImages(cloudinary);

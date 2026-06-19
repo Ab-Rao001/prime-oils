@@ -24,7 +24,13 @@ router.get('/', authorize('admin', 'salesman', 'shopkeeper', 'supplier'), catchA
     return res.json(cachedData);
   }
 
-  const filter = { $or: [{ recipient: req.user.id }, { recipient: null }] };
+  const filter = { 
+    $or: [
+      { recipient: req.user.id },
+      { role: req.user.role },
+      { recipient: null, role: null }
+    ] 
+  };
   let responseData;
 
   if (page || limit) {
@@ -64,7 +70,7 @@ router.patch('/:id/read', authorize('admin', 'salesman', 'shopkeeper', 'supplier
     query.$or = [{ recipient: req.user.id }, { recipient: null }];
   }
 
-  const doc = await Notification.findOneAndUpdate(query, { read: true }, { new: true });
+  const doc = await Notification.findOneAndUpdate(query, { isRead: true, readAt: new Date() }, { new: true });
   if (!doc) throw AppError.notFound('Notification not found');
 
   await cache.del('notifications:list:*');
@@ -73,11 +79,11 @@ router.patch('/:id/read', authorize('admin', 'salesman', 'shopkeeper', 'supplier
 }));
 
 router.post('/mark-all-read', authorize('admin', 'salesman', 'shopkeeper', 'supplier'), catchAsync(async (req, res) => {
-  const filter = { recipient: req.user.id };
-  await Notification.updateMany(filter, { read: true });
+  const filter = { recipient: req.user.id, isRead: false };
+  await Notification.updateMany(filter, { isRead: true, readAt: new Date() });
 
   const docs = await Notification.find({
-    $or: [{ recipient: req.user.id }, { recipient: null }]
+    $or: [{ recipient: req.user.id }, { role: req.user.role }, { recipient: null, role: null }]
   }).sort({ createdAt: -1 }).lean();
 
   await cache.del('notifications:list:*');

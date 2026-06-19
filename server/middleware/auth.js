@@ -23,9 +23,9 @@ export async function authenticate(req, res, next) {
     }
     const decoded = verifyToken(token);
 
-    const user = await User.findById(decoded.id).select('tokenVersion active status role email').lean();
-    if (!user || user.active === false || user.status !== 'active') {
-      return next(new AppError('Account is inactive or suspended', 401, 'UNAUTHORIZED'));
+    const user = await User.findById(decoded.id).select('tokenVersion active status role email isDeleted').lean();
+    if (!user || user.active === false || user.status !== 'active' || user.isDeleted) {
+      return next(new AppError('Account is inactive, suspended, or deleted', 401, 'UNAUTHORIZED'));
     }
 
     if (decoded.tokenVersion !== undefined && user.tokenVersion !== decoded.tokenVersion) {

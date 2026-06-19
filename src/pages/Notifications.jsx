@@ -1,10 +1,10 @@
 import React from 'react';
 import C from '../theme';
 import Badge from '../components/Badge';
-import { api } from '../api/client';
+import { userApi } from '../api/userApi';
 
-const ICONS = { payment: '💳', order: '🛒', stock: '📦', complaint: '⚠️', delivery: '🚚' };
-const COLS  = { payment: C.warn, order: C.info, stock: C.danger, complaint: C.danger, delivery: C.success };
+const ICONS = { PAYMENT: '💳', ORDER: '🛒', INVENTORY: '📦', COMPLAINT: '⚠️', DELIVERY: '🚚', SECURITY: '🔒', SYSTEM: '⚙️', payment: '💳', order: '🛒', stock: '📦', complaint: '⚠️', delivery: '🚚' };
+const COLS  = { PAYMENT: C.warn, ORDER: C.info, INVENTORY: C.danger, COMPLAINT: C.danger, DELIVERY: C.success, SECURITY: C.danger, SYSTEM: C.gold, payment: C.warn, order: C.info, stock: C.danger, complaint: C.danger, delivery: C.success };
 
 export default function Notifications({ role, user, notifications = [], setNotifications }) {
   const setNotifs = setNotifications;
@@ -21,21 +21,21 @@ export default function Notifications({ role, user, notifications = [], setNotif
 
   const markRead = async id => {
     try {
-      await api.markNotificationRead(id);
+      await userApi.markNotificationRead(id);
     } catch { /* local fallback */ }
-    setNotifs(prev => prev.map(n => (n.id === id || n._id === id ? { ...n, read: true } : n)));
+    setNotifs(prev => prev.map(n => (n.id === id || n._id === id ? { ...n, read: true, isRead: true } : n)));
   };
 
   const markAll = async () => {
     try {
-      const updated = await api.markAllNotificationsRead();
+      const updated = await userApi.markAllNotificationsRead();
       setNotifs(updated);
     } catch {
-      setNotifs(prev => prev.map(n => (isVisible(n) ? { ...n, read: true } : n)));
+      setNotifs(prev => prev.map(n => (isVisible(n) ? { ...n, read: true, isRead: true } : n)));
     }
   };
 
-  const unread = visible.filter(n => !n.read).length;
+  const unread = visible.filter(n => !(n.isRead ?? n.read)).length;
 
   return (
     <div className="page-enter">
@@ -53,39 +53,48 @@ export default function Notifications({ role, user, notifications = [], setNotif
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {visible.map(n => (
-          <div
-            key={n.id}
-            onClick={() => markRead(n.id)}
-            style={{
-              background: C.card,
-              border: `1px solid ${n.read ? C.border : C.goldBorder}`,
-              borderRadius: 12, padding: '13px 16px',
-              display: 'flex', alignItems: 'flex-start', gap: 12,
-              opacity: n.read ? 0.65 : 1,
-              cursor: 'pointer', transition: 'opacity 0.2s',
-            }}
-          >
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: `${COLS[n.type] || C.gold}15`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, flexShrink: 0,
-            }}>
-              {ICONS[n.type] || '🔔'}
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: n.read ? 400 : 600, lineHeight: 1.5 }}>{n.msg}</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <span style={{ fontSize: 11, color: C.muted }}>{n.date}</span>
-                <Badge s={n.type} />
+        {visible.map(n => {
+          const isRead = n.isRead ?? n.read;
+          const msg = n.message || n.msg;
+          const title = n.title || 'Notification';
+          const isCritical = n.priority === 'CRITICAL';
+          return (
+            <div
+              key={n.id || n._id}
+              onClick={() => markRead(n.id || n._id)}
+              style={{
+                background: C.card,
+                border: `1px solid ${isRead ? C.border : (isCritical ? C.danger : C.goldBorder)}`,
+                borderLeft: isCritical ? `4px solid ${C.danger}` : (n.priority === 'HIGH' ? `4px solid ${C.warn}` : undefined),
+                borderRadius: 12, padding: '13px 16px',
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+                opacity: isRead ? 0.65 : 1,
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+            >
+              <div style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: `${COLS[n.type] || C.gold}15`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 16, flexShrink: 0,
+              }}>
+                {ICONS[n.type] || '🔔'}
               </div>
+              <div style={{ flex: 1 }}>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: 14, color: isCritical ? C.danger : C.text, fontWeight: 700 }}>{title}</h4>
+                <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: isRead ? 400 : 600, lineHeight: 1.5 }}>{msg}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 11, color: C.muted }}>{n.date || (n.createdAt ? new Date(n.createdAt).toLocaleString() : '')}</span>
+                  <Badge s={n.type} />
+                  {n.priority && <Badge s={n.priority} />}
+                </div>
+              </div>
+              {!isRead && (
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.gold, marginTop: 4, flexShrink: 0 }} />
+              )}
             </div>
-            {!n.read && (
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.gold, marginTop: 4, flexShrink: 0 }} />
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

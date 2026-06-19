@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { api, loginLocal, signupLocal } from '../api/client';
+import { authApi } from '../api/authApi';
 
 export const AuthContext = createContext();
 
@@ -12,7 +12,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await api.getMe();
+        const res = await authApi.getMe();
         if (res.success && res.user) {
           setUser(res.user);
           setUserRole(res.user.role);
@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setError('');
     try {
-      const data = await loginLocal(email, password);
+      const data = await authApi.loginLocal(email, password);
       setUser(data.user);
       setUserRole(data.user.role);
       return data.user;
@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
   const signup = async (name, email, password, confirmPassword, role) => {
     setError('');
     try {
-      const data = await signupLocal(name, email, password, confirmPassword, role);
+      const data = await authApi.signupLocal(name, email, password, confirmPassword, role);
       setUser(data.user);
       setUserRole(data.user.role);
       return data.user;
@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await api.logout();
+      await authApi.logout();
     } catch (e) {
       console.error('Logout failed on backend:', e);
     }

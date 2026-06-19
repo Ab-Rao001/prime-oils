@@ -1,77 +1,44 @@
 import React from 'react';
+import C from '../../theme';
 
-/**
- * Basic shimmer skeleton line simulating text/headers.
- */
-export function SkeletonLine({ width = '100%', height = '16px', borderRadius = '4px', marginBottom = '12px' }) {
+export function Skeleton({ className = '', style = {} }) {
   return (
     <div
-      className="shimmer-bg"
+      className={`shimmer-bg rounded ${className}`}
       style={{
-        width,
-        height,
-        borderRadius,
-        marginBottom,
+        minHeight: '1em',
+        ...style
       }}
-      aria-hidden="true"
     />
   );
 }
 
-/**
- * Premium glassmorphism card skeleton simulation.
- */
-export function SkeletonCard() {
+export function SkeletonCard({ lines = 3 }) {
   return (
-    <div
-      className="card-premium"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px',
-        minHeight: '140px',
-      }}
-      aria-hidden="true"
-    >
-      <SkeletonLine width="40%" height="18px" />
-      <SkeletonLine width="75%" height="32px" />
-      <SkeletonLine width="60%" height="14px" marginBottom="0" />
+    <div className="card-premium">
+      <Skeleton className="w-1/3 h-6 mb-4" />
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton key={i} className="w-full h-4 mb-2" style={{ opacity: 1 - (i * 0.2) }} />
+      ))}
     </div>
   );
 }
 
-/**
- * Reusable table skeleton showing column headers and empty shimmer rows.
- */
-export function SkeletonTable({ rows = 5, cols = 5 }) {
+export function SkeletonTable({ rows = 5, cols = 4 }) {
   return (
-    <div
-      className="table-responsive-container"
-      style={{ padding: '16px' }}
-      aria-hidden="true"
-    >
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '16px', borderBottom: '2px solid #e8f5e9', paddingBottom: '10px' }}>
+    <div className="table-responsive-container w-full overflow-hidden">
+      <div className="flex border-b" style={{ borderColor: C.border, padding: '12px 14px' }}>
         {Array.from({ length: cols }).map((_, i) => (
-          <div key={i} style={{ flex: 1 }}>
-            <SkeletonLine width="60%" height="14px" />
-          </div>
+          <Skeleton key={i} className="h-4 flex-1 mr-4 last:mr-0 opacity-50" />
         ))}
       </div>
       {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} style={{ display: 'flex', gap: '20px', padding: '12px 0', borderBottom: '1px solid #f4f7f5' }}>
+        <div key={r} className="flex border-b" style={{ borderColor: C.border, padding: '16px 14px' }}>
           {Array.from({ length: cols }).map((_, c) => (
-            <div key={c} style={{ flex: 1 }}>
-              <SkeletonLine width={c === 0 ? '80%' : '50%'} height="12px" marginBottom="0" />
-            </div>
+            <Skeleton key={c} className="h-4 flex-1 mr-4 last:mr-0" />
           ))}
         </div>
       ))}
     </div>
   );
 }
-
-export default {
-  Line: SkeletonLine,
-  Card: SkeletonCard,
-  Table: SkeletonTable,
-};

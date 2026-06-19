@@ -49,21 +49,6 @@ export default function Topbar({ user, active, onToggleSidebar, sidebarOpen }) {
         <span style={{ fontWeight: 500, color: C.text, textTransform: 'capitalize' }}>{currentPage}</span>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '5px 12px',
-          background: C.goldBg,
-          borderRadius: 8,
-          border: `1px solid ${C.goldBorder}`,
-        }}
-        aria-label={`Logged in as ${user.name}`}
-      >
-        <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.success }} aria-hidden="true" />
-        <span style={{ fontSize: 12, color: C.gold, fontWeight: 500 }}>{user.name}</span>
-      </div>
     </header>
   );
 }

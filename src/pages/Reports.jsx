@@ -18,7 +18,7 @@ import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
 import { THead, TRow, TCell } from '../components/Table';
 import { PIE_COLORS } from '../config/charts';
-import { api } from '../api/client';
+import { analyticsApi } from '../api/analyticsApi';
 
 function getDefaultDateRange() {
   const now = new Date();
@@ -73,7 +73,7 @@ export default function Reports({ role }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.getReportsSummary({ startDate, endDate });
+      const res = await analyticsApi.getReportsSummary({ startDate, endDate });
       setSummary(res.data);
     } catch (e) {
       setError(e.message || 'Failed to load reports');
@@ -91,7 +91,7 @@ export default function Reports({ role }) {
     setExporting(format);
     setError(null);
     try {
-      await api.downloadReportExport({ startDate, endDate, format });
+      await analyticsApi.downloadReportExport({ startDate, endDate, format });
     } catch (e) {
       setError(e.message || 'Export failed');
     } finally {

@@ -4,6 +4,30 @@ dist/
 .env
 .env.local
 server/.env
+server/serviceAccountKey.json
 server/.tmp-product-images/
 .DS_Store
 node_modules
+logs/
+
+# Exclude Readme and Markdown files
+*.md
+
+# Exclude Test files
+tests/
+__tests__/
+*.test.js
+*.spec.js
+test_*.js
+
+# Exclude Demo and Scratch files
+scratch*.js
+demo/
+server/scripts/clear_data.js
+server/scratch*
+server/test_*
+
+# Exclude Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore

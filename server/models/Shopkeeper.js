@@ -11,13 +11,17 @@ const shopkeeperSchema = new mongoose.Schema({
   phone: { type: String, index: true },
   status: { type: String, default: 'active', index: true },
   credit: { type: Number, default: 0, index: true },
+  creditLimit: { type: Number, default: 0, min: 0 },
   total: { type: Number, default: 0, index: true },
   salesman: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 // Define indexes for scalability
+shopkeeperSchema.index({ name: 1 });
+shopkeeperSchema.index({ salesman: 1 });
 shopkeeperSchema.index({ location: '2dsphere' });
-shopkeeperSchema.index({ status: 1, loc: 1 }); // Compound index for filtering active shopkeepers by region
 
 export default mongoose.model('Shopkeeper', shopkeeperSchema);
-

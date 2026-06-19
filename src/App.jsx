@@ -1,29 +1,16 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ErrorBoundary } from 'react-error-boundary';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { SocketProvider } from './context/SocketContext';
 import { useAuth } from './hooks/useAuth';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import PageLoader from './components/PageLoader';
 
 const Landing = React.lazy(() => import('./pages/Landing'));
 const AuthPage = React.lazy(() => import('./pages/Auth'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-
-function ErrorFallback({ error, resetErrorBoundary }) {
-  return (
-    <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h2 style={{ color: '#e53e3e' }}>Something went wrong:</h2>
-      <pre style={{ background: '#f7fafc', padding: '1rem', borderRadius: '4px', overflow: 'auto' }}>{error.message}</pre>
-      <button 
-        onClick={resetErrorBoundary}
-        style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#3182ce', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-      >
-        Try again
-      </button>
-    </div>
-  );
-}
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -40,8 +27,8 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
-        <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage defaultTab="login" />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/auth" element={<AuthPage defaultTab="login" />} />
         <Route 
           path="/dashboard/*" 
           element={
@@ -58,13 +45,25 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-          <Toaster position="top-right" />
-        </BrowserRouter>
-      </AuthProvider>
-    </ErrorBoundary>
+    <ThemeProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <SocketProvider>
+            <Router>
+              <AppRoutes />
+              <Toaster position="top-right" 
+                toastOptions={{
+                  style: {
+                    background: 'var(--color-card)',
+                    color: 'var(--color-text)',
+                    border: '1px solid var(--color-border)',
+                  }
+                }}
+              />
+            </Router>
+          </SocketProvider>
+        </AuthProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }

@@ -9,12 +9,16 @@ const productSchema = new mongoose.Schema({
   stock: { type: Number, default: 0, index: true },
   unit: String,
   price: { type: Number, default: 0, index: true },
+  costPrice: { type: Number, default: 0 },
   min: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true, index: true },
   supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   imageFile: String,
   imageUrl: String,
   cloudinaryPublicId: String,
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 // Define indexes for scalability

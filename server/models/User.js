@@ -62,6 +62,16 @@ const userSchema = new mongoose.Schema(
       index: true,
     },
 
+    avatarUrl: {
+      type: String,
+      default: null,
+    },
+
+    cloudinaryPublicId: {
+      type: String,
+      default: null,
+    },
+
     active: {
       type: Boolean,
       default: true,
@@ -102,6 +112,14 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    loginHistory: [
+      {
+        time: { type: Date, default: Date.now },
+        ip: String,
+        status: { type: String, enum: ['success', 'failed'] },
+      }
+    ],
+
     // Failed login attempts (for security lockout)
     failedLoginAttempts: {
       type: Number,
@@ -129,6 +147,10 @@ const userSchema = new mongoose.Schema(
     // Password reset functionality
     resetPasswordToken: String,
     resetPasswordExpire: Date,
+
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
   {
     timestamps: true, // Auto-adds createdAt, updatedAt
@@ -177,6 +199,7 @@ userSchema.methods.toJWT = function () {
     email: this.email,
     role: this.role,
     name: this.name,
+    avatarUrl: this.avatarUrl,
   };
 };
 
@@ -194,11 +217,13 @@ userSchema.methods.toPublic = function () {
     role: this.role,
     phone: this.phone,
     address: this.address,
+    avatarUrl: this.avatarUrl,
     status: this.active === false ? 'inactive' : this.status,
     active: this.active !== false,
     createdAt: this.createdAt,
     joinedDate: this.createdAt,
     lastLogin: this.lastLogin,
+    loginHistory: this.loginHistory,
     isSuperAdmin: String(this.email).toLowerCase() === (process.env.SUPER_ADMIN_EMAIL || 'admin@primeoil.com').toLowerCase(),
   };
 };
@@ -222,13 +247,7 @@ userSchema.statics.findByEmailWithPassword = function (email) {
  */
 userSchema.methods.recordFailedLogin = async function () {
   this.failedLoginAttempts += 1;
-
-  // Lock account after 5 failed attempts
-  if (this.failedLoginAttempts >= 5) {
-    this.isLocked = true;
-    this.lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-  }
-
+  // Account lock timer removed as per request
   return this.save();
 };
 
@@ -248,12 +267,7 @@ userSchema.methods.recordSuccessfulLogin = async function () {
  * @returns {boolean} True if locked and lockout period hasn't expired
  */
 userSchema.methods.isAccountLocked = function () {
-  if (!this.isLocked) return false;
-  if (this.lockedUntil && this.lockedUntil < new Date()) {
-    // Lockout period expired
-    return false;
-  }
-  return true;
+  return false; // Lock timer disabled
 };
 
 userSchema.index({ status: 1, role: 1 });

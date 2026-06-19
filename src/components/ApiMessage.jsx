@@ -1,5 +1,6 @@
 import React from 'react';
 import C from '../theme';
+import EmptyState from './common/EmptyState';
 
 export function ApiError({ error, hint = 'Run: npm run server (and npm run server:seed once)' }) {
   if (!error) return null;
@@ -19,6 +20,6 @@ export function ApiError({ error, hint = 'Run: npm run server (and npm run serve
   );
 }
 
-export function ApiEmpty({ message = 'No records yet.' }) {
-  return <p style={{ color: C.muted, fontSize: 13, padding: 24 }}>{message}</p>;
+export function ApiEmpty({ message = 'No records yet.', title = 'No Data', icon = '📭' }) {
+  return <EmptyState title={title} message={message} icon={icon} />;
 }

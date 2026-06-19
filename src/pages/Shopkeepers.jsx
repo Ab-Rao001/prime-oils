@@ -9,10 +9,10 @@ import { useDebounce } from '../hooks/useDebounce';
 import { SkeletonTable } from '../components/common/Skeleton';
 import FormInput from '../components/common/FormInput';
 import { ApiError } from '../components/ApiMessage';
-import { api } from '../api/client';
+import { userApi } from '../api/userApi';
 
 export default function Shopkeepers({ role }) {
-  const { data: shops, setData: setShops, loading, error } = useFetch(() => api.getShopkeepers(), []);
+  const { data: shops, setData: setShops, loading, error } = useFetch(() => userApi.getShopkeepers(), []);
   
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300); // Debounce search input
@@ -52,8 +52,8 @@ export default function Shopkeepers({ role }) {
     return chunks;
   }, [filtered, colsCount]);
 
-  const rowHeight = 220; // Height of card row + margins
-  const viewportHeight = 450;
+  const rowHeight = 304; // Height of card row + margins
+  const viewportHeight = 600;
   
   const { visibleItems, totalHeight, startOffset, onScroll } = useVirtualScroll({
     items: chunkedShops,
@@ -85,9 +85,20 @@ export default function Shopkeepers({ role }) {
 
   const addShopkeeper = async () => {
     if (!validateAddForm()) return;
+    
+    let lat, lng;
+    if (form.loc.includes(',')) {
+      const parts = form.loc.split(',');
+      if (!isNaN(parseFloat(parts[0])) && !isNaN(parseFloat(parts[1]))) {
+        lat = parseFloat(parts[0]);
+        lng = parseFloat(parts[1]);
+      }
+    }
+
     try {
-      const created = await api.createShopkeeper({
+      const created = await userApi.createShopkeeper({
         name: form.name, owner: form.owner, loc: form.loc, phone: form.phone, status: 'active', credit: 0, total: 0,
+        ...(lat && lng ? { latitude: lat, longitude: lng } : {})
       });
       setShops(prev => [...prev, created]);
       setForm({ name: '', owner: '', loc: '', phone: '' });
@@ -111,8 +122,23 @@ export default function Shopkeepers({ role }) {
 
   const saveEdit = async () => {
     if (!validateEditForm()) return;
+
+    let lat, lng;
+    if (editForm.loc.includes(',')) {
+      const parts = editForm.loc.split(',');
+      if (!isNaN(parseFloat(parts[0])) && !isNaN(parseFloat(parts[1]))) {
+        lat = parseFloat(parts[0]);
+        lng = parseFloat(parts[1]);
+      }
+    }
+
     try {
-      const updated = await api.updateShopkeeper(editId, editForm);
+      const payload = { ...editForm };
+      if (lat && lng) {
+        payload.latitude = lat;
+        payload.longitude = lng;
+      }
+      const updated = await userApi.updateShopkeeper(editId, payload);
       setShops(prev => prev.map(s => (s.id === editId || s._id === editId ? updated : s)));
     } catch {
       setShops(prev => prev.map(s =>
@@ -161,14 +187,30 @@ export default function Shopkeepers({ role }) {
               onChange={e => setForm({ ...form, owner: e.target.value })}
               error={formErrors.owner}
             />
-            <FormInput
-              id="loc"
-              label="Location"
-              required
-              value={form.loc}
-              onChange={e => setForm({ ...form, loc: e.target.value })}
-              error={formErrors.loc}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <FormInput
+                id="loc"
+                label="Location (Address, Coordinates, or Maps Link)"
+                required
+                value={form.loc}
+                onChange={e => setForm({ ...form, loc: e.target.value })}
+                error={formErrors.loc}
+                style={{ marginBottom: '4px' }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(pos => {
+                      setForm({ ...form, loc: `${pos.coords.latitude},${pos.coords.longitude}` });
+                    }, () => alert('Unable to retrieve your location'));
+                  }
+                }}
+                style={{ fontSize: 11, color: C.gold, background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600, padding: '2px 0' }}
+              >
+                📍 Use My Current Location
+              </button>
+            </div>
             <FormInput
               id="phone"
               label="Phone Number"
@@ -208,14 +250,30 @@ export default function Shopkeepers({ role }) {
               onChange={e => setEditForm({ ...editForm, owner: e.target.value })}
               error={editErrors.owner}
             />
-            <FormInput
-              id="edit-loc"
-              label="Location"
-              required
-              value={editForm.loc}
-              onChange={e => setEditForm({ ...editForm, loc: e.target.value })}
-              error={editErrors.loc}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <FormInput
+                id="edit-loc"
+                label="Location (Address, Coordinates, or Maps Link)"
+                required
+                value={editForm.loc}
+                onChange={e => setEditForm({ ...editForm, loc: e.target.value })}
+                error={editErrors.loc}
+                style={{ marginBottom: '4px' }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(pos => {
+                      setEditForm({ ...editForm, loc: `${pos.coords.latitude},${pos.coords.longitude}` });
+                    }, () => alert('Unable to retrieve your location'));
+                  }
+                }}
+                style={{ fontSize: 11, color: C.gold, background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600, padding: '2px 0' }}
+              >
+                📍 Use My Current Location
+              </button>
+            </div>
             <FormInput
               id="edit-phone"
               label="Phone Number"
@@ -230,7 +288,7 @@ export default function Shopkeepers({ role }) {
                 id="edit-status"
                 value={editForm.status}
                 onChange={e => setEditForm({ ...editForm, status: e.target.value })}
-                style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text, outline: 'none', fontSize: 13, height: '40px' }}
+                style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: 'none', fontSize: 13, height: '40px' }}
               >
                 {['active','inactive'].map(s => (
                   <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -278,7 +336,7 @@ export default function Shopkeepers({ role }) {
                     display: 'grid',
                     gridTemplateColumns: `repeat(${colsCount}, 1fr)`,
                     gap: '14px',
-                    height: '206px', // fixed height per row of cards
+                    height: '290px', // increased height for map
                   }}
                 >
                   {rowItems.map(s => (
@@ -301,7 +359,7 @@ export default function Shopkeepers({ role }) {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                           <Badge s={s.status} />
-                          {role === 'admin' && (
+                          {['admin', 'shopkeeper', 'salesman'].includes(role) && (
                             <button
                               onClick={() => startEdit(s)}
                               style={{ padding: '5px 10px', background: C.goldBg, border: `1.5px solid ${C.goldBorder}`, borderRadius: 8, cursor: 'pointer', color: C.gold, fontWeight: 700, fontSize: 11, transition: 'all 0.15s ease' }}
@@ -309,14 +367,45 @@ export default function Shopkeepers({ role }) {
                               Edit
                             </button>
                           )}
+                          {role === 'admin' && (
+                            <button
+                              onClick={async () => {
+                                if(window.confirm('Are you sure you want to delete this shop?')) {
+                                  await userApi.deleteShopkeeper(s._id || s.id);
+                                  setShops(prev => prev.filter(x => (x._id || x.id) !== (s._id || s.id)));
+                                }
+                              }}
+                              style={{ padding: '5px 10px', background: 'rgba(220, 38, 38, 0.15)', border: `1.5px solid ${C.danger}`, borderRadius: 8, cursor: 'pointer', color: C.danger, fontWeight: 700, fontSize: 11, transition: 'all 0.15s ease' }}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
 
                       {/* Card Body */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '8px 0' }}>
-                        <div style={{ fontSize: 12, color: C.muted }}>📍 {s.loc}</div>
+                        <div style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span>📍</span>
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.loc}</span>
+                        </div>
                         <div style={{ fontSize: 12, color: C.muted }}>📞 {s.phone}</div>
                       </div>
+
+                      {/* Map Embed */}
+                      {s.loc && (
+                        <div style={{ margin: '8px 0', borderRadius: 8, overflow: 'hidden', height: 80, border: `1px solid ${C.border}` }}>
+                          <iframe
+                            title={`Map for ${s.name}`}
+                            width="100%"
+                            height="100%"
+                            style={{ border: 0 }}
+                            loading="lazy"
+                            allowFullScreen
+                            src={`https://www.google.com/maps?q=${encodeURIComponent(s.loc)}&output=embed`}
+                          ></iframe>
+                        </div>
+                      )}
 
                       {/* Card Financials Footer */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>

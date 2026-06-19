@@ -7,11 +7,13 @@ import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
 import { THead, TRow, TCell } from '../components/Table';
 import { useFetch } from '../hooks/useFetch';
-import { api } from '../api/client';
+import { paymentApi } from '../api/paymentApi';
+import { orderApi } from '../api/orderApi';
+import toast from 'react-hot-toast';
 
 export default function Payments({ role, user, onSendNotification }) {
-  const { data: pays, setData: setPays, loading, error } = useFetch(() => api.getPayments(), []);
-  const { data: orders } = useFetch(() => api.getOrders(), []);
+  const { data: pays, setData: setPays, loading, error } = useFetch(() => paymentApi.getPayments(), []);
+  const { data: orders } = useFetch(() => orderApi.getOrders(), []);
   const [modal, setModal] = useState(null);
   const [amount, setAmount] = useState('');
 
@@ -23,12 +25,16 @@ export default function Payments({ role, user, onSendNotification }) {
   const recordPayment = async () => {
     if (!modal || !amount) return;
     const add = +amount;
+    if (Number.isNaN(add) || add <= 0) {
+      toast.error('Please enter a valid positive amount.');
+      return;
+    }
     const p = pays.find(x => x.id === modal);
     if (!p) return;
     const newPaid = (p.paid || 0) + add;
     const status = newPaid >= p.total ? 'paid' : newPaid > 0 ? 'partial' : p.status;
     try {
-      const updated = await api.updatePayment(modal, { paid: newPaid, status });
+      const updated = await paymentApi.updatePayment(modal, { paid: newPaid, status });
       setPays(prev => prev.map(x => x.id === modal ? updated : x));
       onSendNotification?.({ type: 'payment', msg: `Payment of PKR ${add.toLocaleString()} recorded for ${p.shop}` });
     } catch {
@@ -67,12 +73,12 @@ export default function Payments({ role, user, onSendNotification }) {
                   <TCell>{p.type}</TCell>
                   <TCell><Badge s={p.status} /></TCell>
                   <td style={{ padding: '8px 12px' }}>
-                    {due > 0 && (role === 'admin' || role === 'salesman') && (
+                    {due > 0 && (
                       <button
                         onClick={() => setModal(p.id)}
                         style={{ padding: '5px 10px', background: C.goldBg, border: `1px solid ${C.goldBorder}`, borderRadius: 6, color: C.gold, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
                       >
-                        Record
+                        {role === 'shopkeeper' ? 'Pay Now' : 'Record'}
                       </button>
                     )}
                   </td>
@@ -86,7 +92,7 @@ export default function Payments({ role, user, onSendNotification }) {
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: C.card, borderRadius: 12, padding: 24, width: 320 }}>
-            <div style={{ fontWeight: 700, marginBottom: 12 }}>Record Payment</div>
+            <div style={{ fontWeight: 700, marginBottom: 12 }}>{role === 'shopkeeper' ? 'Make Payment' : 'Record Payment'}</div>
             <input
               type="number"
               value={amount}
@@ -95,7 +101,7 @@ export default function Payments({ role, user, onSendNotification }) {
               style={{ width: '100%', padding: 10, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 12, boxSizing: 'border-box' }}
             />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={recordPayment} style={{ flex: 1, padding: 10, background: C.gold, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Save</button>
+              <button onClick={recordPayment} style={{ flex: 1, padding: 10, background: C.gold, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>{role === 'shopkeeper' ? 'Pay' : 'Save'}</button>
               <button onClick={() => { setModal(null); setAmount(''); }} style={{ flex: 1, padding: 10, border: `1px solid ${C.border}`, borderRadius: 8, background: 'transparent', cursor: 'pointer' }}>Cancel</button>
             </div>
           </div>

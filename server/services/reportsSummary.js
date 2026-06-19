@@ -7,9 +7,11 @@ function formatWeekLabel(date) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export async function getReportsSummary(user, startDate, endDate) {
+export const getReportsSummary = async (user, startDate, endDate) => {
   const { orderMatch, paymentMatch } = await buildReportsScope(user, startDate, endDate);
-  const revenueMatch = revenueOrderMatch(orderMatch);
+  const revenueMatch = { ...revenueOrderMatch(orderMatch), isDeleted: { $ne: true } };
+  const scopedOrderMatch = { ...orderMatch, isDeleted: { $ne: true } };
+  const scopedPaymentMatch = { ...paymentMatch, isDeleted: { $ne: true } };
 
   const [
     revenueAgg,
@@ -26,17 +28,17 @@ export async function getReportsSummary(user, startDate, endDate) {
     ]),
 
     Order.aggregate([
-      { $match: orderMatch },
+      { $match: scopedOrderMatch },
       { $count: 'totalOrders' },
     ]),
 
     Payment.aggregate([
-      { $match: paymentMatch },
+      { $match: scopedPaymentMatch },
       { $group: { _id: null, totalPaid: { $sum: '$paid' } } },
     ]),
 
     Order.aggregate([
-      { $match: orderMatch },
+      { $match: scopedOrderMatch },
       {
         $lookup: {
           from: 'payments',
@@ -57,7 +59,7 @@ export async function getReportsSummary(user, startDate, endDate) {
     ]),
 
     Order.aggregate([
-      { $match: orderMatch },
+      { $match: scopedOrderMatch },
       { $group: { _id: '$status', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]),
@@ -137,15 +139,17 @@ export async function getReportsSummary(user, startDate, endDate) {
     revenueByWeek,
     topProducts: topProductsAgg,
   };
-}
+};
 
-export async function fetchExportData(user, startDate, endDate) {
+export const fetchExportData = async (user, startDate, endDate) => {
   const { orderMatch, paymentMatch } = await buildReportsScope(user, startDate, endDate);
-  const revenueMatch = revenueOrderMatch(orderMatch);
+  const revenueMatch = { ...revenueOrderMatch(orderMatch), isDeleted: { $ne: true } };
+  const scopedOrderMatch = { ...orderMatch, isDeleted: { $ne: true } };
+  const scopedPaymentMatch = { ...paymentMatch, isDeleted: { $ne: true } };
 
   const [orders, payments, topProducts] = await Promise.all([
     Order.aggregate([
-      { $match: orderMatch },
+      { $match: scopedOrderMatch },
       { $sort: { createdAt: -1 } },
       {
         $lookup: {

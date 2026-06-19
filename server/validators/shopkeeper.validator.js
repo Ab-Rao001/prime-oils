@@ -7,6 +7,7 @@ export const createShopkeeperSchema = z.object({
   phone: z.string().optional().nullable(),
   status: z.string().optional().default('active'),
   credit: z.number().optional().default(0),
+  creditLimit: z.number().min(0, 'Credit Limit cannot be negative').optional().default(0),
   total: z.number().optional().default(0),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),

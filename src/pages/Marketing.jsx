@@ -6,10 +6,10 @@ import StatCard from '../components/StatCard';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
 import { useFetch } from '../hooks/useFetch';
-import { api } from '../api/client';
+import { userApi } from '../api/userApi';
 
 export default function Marketing() {
-  const { data: campaigns, setData: setCampaigns, loading, error } = useFetch(() => api.getCampaigns(), []);
+  const { data: campaigns, setData: setCampaigns, loading, error } = useFetch(() => userApi.getCampaigns(), []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', budget: '', start: '', end: '' });
 
@@ -21,7 +21,7 @@ export default function Marketing() {
     const start = isNaN(d1.getTime()) ? form.start : d1.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     const end = isNaN(d2.getTime()) ? form.end : d2.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     try {
-      const created = await api.createCampaign({
+      const created = await userApi.createCampaign({
         name: form.name, budget: budgetNum, spent: 0, start, end, status: 'planned', roi: '—',
       });
       setCampaigns(prev => [...prev, created]);
@@ -129,7 +129,7 @@ export default function Marketing() {
                 ['Spent',     c.spent,            c.spent > c.budget * 0.9 ? C.danger : C.warn],
                 ['Remaining', c.budget - c.spent, C.success],
               ].map(([label, val, color]) => (
-                <div key={label} style={{ background: '#F6F3EC', borderRadius: 8, padding: '9px 11px' }}>
+                <div key={label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 11px' }}>
                   <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color, marginTop: 2 }}>PKR {val.toLocaleString()}</div>
                 </div>
@@ -143,7 +143,7 @@ export default function Marketing() {
                   <span>Budget used</span>
                   <span>{Math.round((c.spent / c.budget) * 100)}%</span>
                 </div>
-                <div style={{ height: 6, borderRadius: 3, background: '#E6DECE', overflow: 'hidden' }}>
+                <div style={{ height: 6, borderRadius: 3, background: C.bg, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
                   <div style={{
                     width: `${Math.min(100, (c.spent / c.budget) * 100)}%`,
                     height: '100%',

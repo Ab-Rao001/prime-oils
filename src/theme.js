@@ -1,24 +1,23 @@
 const C = {
+  sb:        'var(--color-sb)',
+  sbBorder:  'var(--color-sbBorder)',
 
-  sb:        '#0D2A14',
-  sbBorder:  'rgba(245,200,66,0.14)',
+  gold:       'var(--color-gold)',
+  goldL:      'var(--color-goldL)',
+  goldBg:     'var(--color-goldBg)',
+  goldBorder: 'var(--color-goldBorder)',
 
-  gold:       '#D4880A',
-  goldL:      '#F5C842',
-  goldBg:     'rgba(245,200,66,0.09)',
-  goldBorder: 'rgba(245,200,66,0.28)',
-
-  bg:     '#E8F5E9',
-  card:   '#FFFFFF',
-  text:   '#1A2E1F',
-  muted:  '#5A7A5F',
-  border: '#C8E6C9',
+  bg:     'var(--color-bg)',
+  card:   'var(--color-card)',
+  text:   'var(--color-text)',
+  muted:  'var(--color-muted)',
+  border: 'var(--color-border)',
 
   // Semantic
-  success: '#16A34A', sBg: '#F0FDF4',
-  danger:  '#DC2626', dBg: '#FEF2F2',
-  warn:    '#D97706', wBg: '#FFFBEB',
-  info:    '#2563EB', iBg: '#EFF6FF',
+  success: 'var(--color-success)', sBg: 'var(--color-sBg)',
+  danger:  'var(--color-danger)', dBg: 'var(--color-dBg)',
+  warn:    'var(--color-warn)', wBg: 'var(--color-wBg)',
+  info:    'var(--color-info)', iBg: 'var(--color-iBg)',
 };
 
 export default C;

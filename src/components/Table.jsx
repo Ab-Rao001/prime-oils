@@ -20,7 +20,7 @@ export function THead({ cols }) {
               textTransform: 'uppercase',
               letterSpacing: '0.75px',
               whiteSpace: 'nowrap',
-              background: '#f4f7f5',
+              background: C.bg,
             }}
           >
             {c}
@@ -77,14 +77,17 @@ export default function Table({
   pagination = null,
   onPageChange = null,
   emptyMessage = "No records found.",
-  caption = "Data table"
+  caption = "Data table",
+  virtualPadding = null,
+  onScroll = null,
+  style = {}
 }) {
   if (loading) {
     return <SkeletonTable rows={5} cols={headers.length || 4} />;
   }
 
   return (
-    <div className="table-responsive-container" style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="table-responsive-container" onScroll={onScroll} style={{ display: 'flex', flexDirection: 'column', ...style }}>
       <table
         role="table"
         aria-busy={loading}
@@ -93,6 +96,12 @@ export default function Table({
         <caption className="sr-only">{caption}</caption>
         <THead cols={headers} />
         <tbody>
+          {virtualPadding && virtualPadding.top > 0 && (
+            <tr style={{ height: `${virtualPadding.top}px` }}>
+              <td colSpan={headers.length || 1} style={{ padding: 0 }} />
+            </tr>
+          )}
+
           {data.length === 0 ? (
             <tr>
               <td
@@ -110,6 +119,12 @@ export default function Table({
           ) : (
             data.map((item, index) => renderRow(item, index))
           )}
+
+          {virtualPadding && virtualPadding.bottom > 0 && (
+            <tr style={{ height: `${virtualPadding.bottom}px` }}>
+              <td colSpan={headers.length || 1} style={{ padding: 0 }} />
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -122,7 +137,7 @@ export default function Table({
             justifyContent: 'space-between',
             padding: '12px 16px',
             borderTop: `1px solid ${C.border}`,
-            background: '#fafbfa',
+            background: C.bg,
             borderBottomLeftRadius: 14,
             borderBottomRightRadius: 14
           }}
@@ -141,8 +156,8 @@ export default function Table({
                 fontSize: 12,
                 borderRadius: 6,
                 border: `1px solid ${C.border}`,
-                background: 'white',
-                color: (!pagination.hasPrev && pagination.page <= 1) ? '#c0c0c0' : C.text,
+                background: C.card,
+                color: (!pagination.hasPrev && pagination.page <= 1) ? C.muted : C.text,
                 cursor: (!pagination.hasPrev && pagination.page <= 1) ? 'not-allowed' : 'pointer',
                 fontWeight: 500,
                 transition: 'all 0.15s ease',
@@ -159,8 +174,8 @@ export default function Table({
                 fontSize: 12,
                 borderRadius: 6,
                 border: `1px solid ${C.border}`,
-                background: 'white',
-                color: !pagination.hasNext ? '#c0c0c0' : C.text,
+                background: C.card,
+                color: !pagination.hasNext ? C.muted : C.text,
                 cursor: !pagination.hasNext ? 'not-allowed' : 'pointer',
                 fontWeight: 500,
                 transition: 'all 0.15s ease',

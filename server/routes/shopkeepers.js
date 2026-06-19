@@ -17,15 +17,17 @@ const router = Router();
 router.use(authenticate);
 
 async function buildShopkeeperListFilter(user) {
-  const filter = {};
+  const filter = { isDeleted: { $ne: true } };
   if (user.role === 'shopkeeper') {
     const userDoc = await User.findById(user.id);
     filter.owner = userDoc ? userDoc.name : '';
   } else if (user.role === 'salesman') {
-    const shopIds = await Order.distinct('shop', { man: user.id });
+    const mongoose = (await import('mongoose')).default;
+    const salesmanId = new mongoose.Types.ObjectId(user.id);
+    const shopIds = await Order.distinct('shop', { man: salesmanId });
     filter.$or = [
       { _id: { $in: shopIds } },
-      { salesman: user.id }
+      { salesman: salesmanId }
     ];
   }
   return filter;
@@ -99,9 +101,14 @@ router.post('/', authorize('admin', 'salesman'), validate(createShopkeeperSchema
   res.status(201).json(formatShopkeeper(doc));
 }));
 
-router.patch('/:id', authorize('admin', 'salesman'), validate(updateShopkeeperSchema), catchAsync(async (req, res) => {
+router.patch('/:id', authorize('admin', 'salesman', 'shopkeeper'), validate(updateShopkeeperSchema), catchAsync(async (req, res) => {
   const { id } = req.params;
   const query = { _id: id };
+
+  if (req.user.role === 'shopkeeper') {
+    const userDoc = await User.findById(req.user.id);
+    query.owner = userDoc ? userDoc.name : '';
+  }
 
   const updates = { ...req.validatedBody };
   if (req.validatedBody.latitude && req.validatedBody.longitude) {
@@ -117,6 +124,14 @@ router.patch('/:id', authorize('admin', 'salesman'), validate(updateShopkeeperSc
   await cache.del('shopkeepers:list:*');
 
   res.json(formatShopkeeper(doc));
+}));
+
+router.delete('/:id', authorize('admin'), catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const doc = await Shopkeeper.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
+  if (!doc) throw AppError.notFound('Shopkeeper not found');
+  await cache.del('shopkeepers:list:*');
+  res.json({ success: true, id });
 }));
 
 export default router;

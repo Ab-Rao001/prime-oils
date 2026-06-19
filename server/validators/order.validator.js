@@ -15,9 +15,11 @@ export const createOrderSchema = z.object({
     })
   ).min(1, 'Order must contain at least one item'),
   total: z.number().nonnegative('Total must be non-negative').optional(),
-  status: z.enum(['pending', 'confirmed', 'delivered', 'cancelled']).optional().default('pending'),
+  status: z.enum(['pending', 'pending_approval', 'paid', 'confirmed', 'ready_for_dispatch', 'in_transit', 'partially_delivered', 'delivered', 'return_requested', 'returned', 'cancelled']).optional().default('pending'),
   date: z.string().optional(),
   pay: z.string().optional().default('installment'),
+  adminOverride: z.boolean().optional(),
+  overrideReason: z.string().optional(),
 }).refine(data => data.shopkeeperId || data.shop, {
   message: "Either shopkeeperId (ObjectId) or shop identifier must be provided",
   path: ["shop"]
@@ -34,11 +36,11 @@ export const updateOrderSchema = z.object({
     })
   ).min(1).optional(),
   total: z.number().nonnegative().optional(),
-  status: z.enum(['pending', 'confirmed', 'delivered', 'cancelled']).optional(),
+  status: z.enum(['pending', 'pending_approval', 'paid', 'confirmed', 'ready_for_dispatch', 'in_transit', 'partially_delivered', 'delivered', 'return_requested', 'returned', 'cancelled']).optional(),
   date: z.string().optional(),
   pay: z.string().optional(),
 });
 
 export const updateOrderStatusSchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'delivered', 'cancelled'], { required_error: 'Status is required' }),
+  status: z.enum(['pending', 'pending_approval', 'paid', 'confirmed', 'ready_for_dispatch', 'in_transit', 'partially_delivered', 'delivered', 'return_requested', 'returned', 'cancelled'], { required_error: 'Status is required' }),
 });

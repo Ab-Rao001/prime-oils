@@ -7,18 +7,18 @@ import ProductCard, { formatProductPrice } from '../components/ProductCard';
 import ProductImageUpload from '../components/ProductImageUpload';
 import { SkeletonTable } from '../components/common/Skeleton';
 import { ApiError, ApiEmpty } from '../components/ApiMessage';
-import { THead, TRow, TCell } from '../components/Table';
+import Table, { TRow, TCell } from '../components/Table';
 import FormInput from '../components/common/FormInput';
 import { sortProductsBySize } from '../config/products';
 import { useFetch } from '../hooks/useFetch';
 import { useVirtualScroll } from '../hooks/useVirtual';
 import { useDebounce } from '../hooks/useDebounce';
-import { api } from '../api/client';
+import { inventoryApi } from '../api/inventoryApi';
 
-const EMPTY_FORM = { name: '', cat: '', stock: '', unit: '', price: '', min: '' };
+const EMPTY_FORM = { name: '', cat: '', stock: '', unit: '', price: '', costPrice: '', min: '' };
 
 export default function Inventory({ role }) {
-  const { data: products, setData: setProducts, loading, error } = useFetch(() => api.getProducts(), []);
+  const { data: products, setData: setProducts, loading, error } = useFetch(() => inventoryApi.getProducts(), []);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
 
@@ -27,6 +27,8 @@ export default function Inventory({ role }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [adjust, setAdjust] = useState({});
+  const [receivingId, setReceivingId] = useState(null);
+  const [receiveData, setReceiveData] = useState({ quantity: '', unitCost: '', notes: '' });
 
   const [pendingImageFile, setPendingImageFile] = useState(null);
   const [imageError, setImageError] = useState(null);
@@ -35,7 +37,8 @@ export default function Inventory({ role }) {
   const [saving, setSaving] = useState(false);
 
   const canAddProduct = role === 'admin' || role === 'supplier';
-  const canAdjustStock = role === 'supplier';
+  // Disabling manual stock adjustment for Enterprise Mode
+  const canAdjustStock = false;
 
   const filtered = sortProductsBySize(
     products.filter(p =>
@@ -89,6 +92,7 @@ export default function Inventory({ role }) {
       stock: String(product.stock ?? ''),
       unit: product.unit || '',
       price: String(product.price ?? ''),
+      costPrice: String(product.costPrice ?? ''),
       min: String(product.min ?? ''),
     });
     setFormErrors({});
@@ -101,6 +105,7 @@ export default function Inventory({ role }) {
     if (!form.name.trim()) errors.name = 'Product name is required';
     if (!form.cat.trim()) errors.cat = 'Category is required';
     if (form.price === '' || isNaN(form.price) || +form.price < 0) errors.price = 'Price must be a positive number';
+    if (form.costPrice !== '' && (isNaN(form.costPrice) || +form.costPrice < 0)) errors.costPrice = 'Cost price cannot be negative';
     if (form.stock === '' || isNaN(form.stock) || +form.stock < 0) errors.stock = 'Stock must be at least 0';
     setFormErrors(errors);
     return Object.keys(errors).length === 0 && !imageError;
@@ -108,10 +113,10 @@ export default function Inventory({ role }) {
 
   const syncProductImage = async productId => {
     if (removeExistingImage) {
-      return api.deleteProductImage(productId);
+      return inventoryApi.deleteProductImage(productId);
     }
     if (pendingImageFile) {
-      return api.uploadProductImage(productId, pendingImageFile, setUploadProgress);
+      return inventoryApi.uploadProductImage(productId, pendingImageFile, setUploadProgress);
     }
     return null;
   };
@@ -129,17 +134,18 @@ export default function Inventory({ role }) {
         stock: +form.stock,
         unit: form.unit || 'Bottle',
         price: +form.price,
+        costPrice: +form.costPrice || 0,
         min: +form.min || 0,
       };
 
       let saved;
       if (editingProduct) {
-        saved = await api.updateProduct(pid(editingProduct), payload);
+        saved = await inventoryApi.updateProduct(pid(editingProduct), payload);
         const withImage = await syncProductImage(pid(saved));
         if (withImage) saved = withImage;
         setProducts(prev => prev.map(p => (pid(p) === pid(saved) ? saved : p)));
       } else {
-        saved = await api.createProduct(payload);
+        saved = await inventoryApi.createProduct(payload);
         if (pendingImageFile || removeExistingImage) {
           const withImage = await syncProductImage(pid(saved));
           if (withImage) saved = withImage;
@@ -163,9 +169,29 @@ export default function Inventory({ role }) {
     const delta = +adjust[id];
     if (Number.isNaN(delta)) return;
     try {
-      const updated = await api.adjustStock(id, delta);
+      const updated = await inventoryApi.adjustStock(id, delta);
       setProducts(prev => prev.map(p => (pid(p) === id ? updated : p)));
       setAdjust(prev => ({ ...prev, [id]: '' }));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const applyReceiveStock = async id => {
+    const qty = +receiveData.quantity;
+    const cost = +receiveData.unitCost;
+    if (Number.isNaN(qty) || qty <= 0) return;
+    
+    try {
+      const updated = await inventoryApi.receiveProduct({ 
+        productId: id, 
+        quantity: qty, 
+        unitCost: cost || undefined,
+        notes: receiveData.notes
+      });
+      setProducts(prev => prev.map(p => (pid(p) === id ? updated : p)));
+      setReceivingId(null);
+      setReceiveData({ quantity: '', unitCost: '', notes: '' });
     } catch (e) {
       console.error(e);
     }
@@ -176,7 +202,8 @@ export default function Inventory({ role }) {
     { label: 'Category', key: 'cat', type: 'text', required: true },
     { label: 'Stock', key: 'stock', type: 'number', required: true },
     { label: 'Unit (e.g. Bottle)', key: 'unit', type: 'text' },
-    { label: 'Price (PKR)', key: 'price', type: 'number', required: true },
+    { label: 'Selling Price (PKR)', key: 'price', type: 'number', required: true },
+    { label: 'Cost Price (PKR)', key: 'costPrice', type: 'number' },
     { label: 'Min Stock Level', key: 'min', type: 'number' },
   ];
 
@@ -309,77 +336,90 @@ export default function Inventory({ role }) {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16, marginBottom: 24 }}>
-            {filtered.slice(0, 3).map(p => (
+            {filtered.map(p => (
               <ProductCard key={pid(p)} product={p} showStock />
             ))}
           </div>
 
-          <div
-            className="table-responsive-container"
+          <Table
+            headers={
+              canAddProduct
+                ? ['Product', 'Size', 'Category', 'Stock', 'Unit', 'Cost', 'Sell', 'Min', 'Status', 'Actions']
+                : ['Product', 'Size', 'Category', 'Stock', 'Unit', 'Cost', 'Sell', 'Min', 'Status']
+            }
+            data={visibleItems}
             onScroll={onScroll}
-            style={{
-              maxHeight: `${viewportHeight}px`,
-              overflowY: 'auto',
-              borderRadius: 14,
-              border: `1px solid ${C.border}`,
-            }}
-          >
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-              <caption className="sr-only">Inventory database records</caption>
-              <THead
-                cols={
-                  canAddProduct
-                    ? canAdjustStock
-                      ? ['Product', 'Size', 'Category', 'Stock', 'Unit', 'Price', 'Min', 'Status', 'Edit', 'Adjust']
-                      : ['Product', 'Size', 'Category', 'Stock', 'Unit', 'Price', 'Min', 'Status', 'Edit']
-                    : canAdjustStock
-                      ? ['Product', 'Size', 'Category', 'Stock', 'Unit', 'Price', 'Min', 'Status', 'Adjust']
-                      : ['Product', 'Size', 'Category', 'Stock', 'Unit', 'Price', 'Min', 'Status']
-                }
-              />
-              <tbody>
-                {startOffset > 0 && (
-                  <tr style={{ height: `${startOffset}px` }}>
-                    <td
-                      colSpan={canAddProduct ? (canAdjustStock ? 10 : 9) : canAdjustStock ? 9 : 8}
-                      style={{ padding: 0 }}
-                    />
-                  </tr>
-                )}
-
-                {visibleItems.map(p => (
-                  <TRow key={pid(p)}>
-                    <TCell bold>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {p.imageUrl && (
-                          <img
-                            src={p.imageUrl}
-                            alt=""
-                            style={{
-                              width: 36,
-                              height: 36,
-                              objectFit: 'contain',
-                              borderRadius: 6,
-                              background: '#f5f5f0',
-                            }}
-                          />
-                        )}
-                        {p.name}
+            style={{ maxHeight: `${viewportHeight}px`, overflowY: 'auto' }}
+            virtualPadding={{ top: startOffset, bottom: bottomPadding }}
+            emptyMessage="No products in inventory match your filters."
+            caption="Inventory database records"
+            renderRow={p => (
+              <TRow key={pid(p)}>
+                <TCell bold>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {p.imageUrl && (
+                      <img
+                        src={p.imageUrl}
+                        alt=""
+                        style={{
+                          width: 36,
+                          height: 36,
+                          objectFit: 'contain',
+                          borderRadius: 6,
+                          background: '#f5f5f0',
+                        }}
+                      />
+                    )}
+                    {p.name}
+                  </div>
+                </TCell>
+                <TCell>{p.size || '—'}</TCell>
+                <TCell>{p.cat}</TCell>
+                <TCell bold color={p.stock < p.min ? C.danger : C.text}>
+                  {p.stock}
+                </TCell>
+                <TCell>{p.unit}</TCell>
+                <TCell>{formatProductPrice(p.costPrice || 0)}</TCell>
+                <TCell>{formatProductPrice(p.price)}</TCell>
+                <TCell>{p.min}</TCell>
+                <TCell>
+                  <Badge s={p.stock < p.min ? 'overdue' : 'active'} />
+                </TCell>
+                {canAddProduct && (
+                  <td style={{ padding: '8px 12px' }}>
+                    {receivingId === pid(p) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input
+                          type="number"
+                          value={receiveData.quantity}
+                          onChange={e => setReceiveData(prev => ({ ...prev, quantity: e.target.value }))}
+                          placeholder="Qty"
+                          style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12 }}
+                        />
+                        <input
+                          type="number"
+                          value={receiveData.unitCost}
+                          onChange={e => setReceiveData(prev => ({ ...prev, unitCost: e.target.value }))}
+                          placeholder="Unit Cost"
+                          style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12 }}
+                        />
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button
+                            onClick={() => applyReceiveStock(pid(p))}
+                            style={{ padding: '4px 8px', background: C.gold, color: '#fff', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, flex: 1 }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setReceivingId(null)}
+                            style={{ padding: '4px 8px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, flex: 1 }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    </TCell>
-                    <TCell>{p.size || '—'}</TCell>
-                    <TCell>{p.cat}</TCell>
-                    <TCell bold color={p.stock < p.min ? C.danger : C.text}>
-                      {p.stock}
-                    </TCell>
-                    <TCell>{p.unit}</TCell>
-                    <TCell>{formatProductPrice(p.price)}</TCell>
-                    <TCell>{p.min}</TCell>
-                    <TCell>
-                      <Badge s={p.stock < p.min ? 'overdue' : 'active'} />
-                    </TCell>
-                    {canAddProduct && (
-                      <td style={{ padding: '8px 12px' }}>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8 }}>
                         <button
                           type="button"
                           onClick={() => openEditForm(p)}
@@ -396,61 +436,31 @@ export default function Inventory({ role }) {
                         >
                           Edit
                         </button>
-                      </td>
-                    )}
-                    {canAdjustStock && (
-                      <td style={{ padding: '8px 12px' }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input
-                            type="number"
-                            value={adjust[pid(p)] || ''}
-                            onChange={e => setAdjust(prev => ({ ...prev, [pid(p)]: e.target.value }))}
-                            style={{
-                              width: 70,
-                              padding: '6px 8px',
-                              border: `1.5px solid ${C.border}`,
-                              borderRadius: 7,
-                              fontSize: 12,
-                              color: C.text,
-                              background: C.bg,
-                              outline: 'none',
-                              boxSizing: 'border-box',
-                            }}
-                            placeholder="+"
-                            aria-label={`Deduct or add stock for ${p.name}`}
-                          />
+                        {(role === 'supplier' || role === 'admin') && (
                           <button
-                            onClick={() => applyStockAdjust(pid(p))}
+                            type="button"
+                            onClick={() => setReceivingId(pid(p))}
                             style={{
                               padding: '6px 12px',
-                              background: C.goldBg,
-                              border: `1.5px solid ${C.goldBorder}`,
+                              background: 'transparent',
+                              border: `1.5px solid ${C.border}`,
                               borderRadius: 8,
-                              color: C.gold,
+                              color: C.text,
                               fontSize: 11,
                               cursor: 'pointer',
                               fontWeight: 700,
                             }}
                           >
-                            Apply
+                            Receive
                           </button>
-                        </div>
-                      </td>
+                        )}
+                      </div>
                     )}
-                  </TRow>
-                ))}
-
-                {bottomPadding > 0 && (
-                  <tr style={{ height: `${bottomPadding}px` }}>
-                    <td
-                      colSpan={canAddProduct ? (canAdjustStock ? 10 : 9) : canAdjustStock ? 9 : 8}
-                      style={{ padding: 0 }}
-                    />
-                  </tr>
+                  </td>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TRow>
+            )}
+          />
         </>
       )}
 
