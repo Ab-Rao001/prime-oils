@@ -48,6 +48,7 @@ export default function Dispatch({ role, users }) {
   }, [users, fetchedUsers]);
 
   const pendingOrders = useMemo(() => {
+    const ordersArray = Array.isArray(orders) ? orders : [];
     const activeOrderIds = new Set();
     if (dispatches && Array.isArray(dispatches)) {
       dispatches.forEach(d => {
@@ -59,7 +60,7 @@ export default function Dispatch({ role, users }) {
         }
       });
     }
-    return orders.filter(o => !activeOrderIds.has(o._id?.toString()));
+    return ordersArray.filter(o => !activeOrderIds.has(o._id?.toString()));
   }, [orders, dispatches]);
 
   const handleOrderToggle = (orderId) => {

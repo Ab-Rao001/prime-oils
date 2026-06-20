@@ -156,7 +156,7 @@ export default function Complaints({ role, user }) {
 
       <div className="flex flex-col gap-3">
         {visible.map(c => (
-          <div key={c.id} className="bg-card border border-border dark:border-border-dark rounded-xl py-3.5 px-4.5">
+          <div key={c.id} className="bg-card border border-border dark:border-border-dark rounded-xl p-5">
             <div className="flex justify-between items-start flex-wrap gap-2">
               <div>
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
