@@ -258,14 +258,8 @@ userSchema.statics.findByEmailWithPassword = function (email) {
  */
 userSchema.methods.recordFailedLogin = async function () {
   this.failedLoginAttempts += 1;
-  const update = { failedLoginAttempts: this.failedLoginAttempts };
-  if (this.failedLoginAttempts >= 5) {
-    this.isLocked = true;
-    this.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
-    update.isLocked = true;
-    update.lockedUntil = this.lockedUntil;
-  }
-  return this.constructor.updateOne({ _id: this._id }, { $set: update });
+  // No auto-lockout — admins manage account status manually
+  return this.constructor.updateOne({ _id: this._id }, { $set: { failedLoginAttempts: this.failedLoginAttempts } });
 };
 
 /**
@@ -280,14 +274,10 @@ userSchema.methods.recordSuccessfulLogin = async function () {
 
 /**
  * Check if account is currently locked
- * @returns {boolean} True if locked and lockout period hasn't expired
+ * @returns {boolean} Always false — auto-lockout is disabled
  */
 userSchema.methods.isAccountLocked = function () {
-  if (!this.isLocked) return false;
-  if (this.lockedUntil && this.lockedUntil < new Date()) {
-    return false; // Lock expired
-  }
-  return true;
+  return false; // Auto-lockout disabled; admins control account status via the active/status fields
 };
 
 userSchema.index({ status: 1, role: 1 });

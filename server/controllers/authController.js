@@ -260,22 +260,53 @@ export const signup = catchAsync(async (req, res) => {
     throw new AppError('Email is already registered', 409, 'EMAIL_EXISTS');
   }
 
-  // FORCE SAFE ROLE (Ghost Mode Patch)
+  // FORCE SAFE ROLE (Ghost Mode Patch — users cannot self-assign admin/supplier/salesman)
   const safeRole = 'shopkeeper';
 
+  // ── Step 1: Create user in Firebase first ────────────────────────────────
+  let firebaseUid = null;
+  if (isFirebaseInitialized && auth) {
+    try {
+      const firebaseUser = await auth.createUser({
+        email: email.toLowerCase(),
+        password,          // Firebase stores hashed version of plaintext password
+        displayName: name,
+      });
+      firebaseUid = firebaseUser.uid;
+      logger.info(`Firebase user created: ${email} (uid: ${firebaseUid})`);
+    } catch (firebaseErr) {
+      // If email already exists in Firebase, fetch the existing UID and re-link
+      if (firebaseErr.code === 'auth/email-already-exists') {
+        try {
+          const existingFbUser = await auth.getUserByEmail(email.toLowerCase());
+          firebaseUid = existingFbUser.uid;
+          // Update Firebase password to match what user provided
+          await auth.updateUser(firebaseUid, { password, displayName: name });
+          logger.info(`Re-linked existing Firebase user: ${email} (uid: ${firebaseUid})`);
+        } catch (relinkErr) {
+          throw AppError.validation('Account setup failed (Firebase): ' + relinkErr.message);
+        }
+      } else {
+        throw AppError.validation('Failed to create Firebase account: ' + firebaseErr.message);
+      }
+    }
+  }
+
+  // ── Step 2: Create user in MongoDB (with firebaseUid already set) ─────────
   const newUser = await User.create({
     name,
     email: email.toLowerCase(),
-    password,
+    password,              // bcrypt hash happens via pre-save hook
     phone: phone || null,
     role: safeRole,
     status: 'active',
     active: true,
+    firebaseUid,           // stored at creation — no extra save() needed
   });
 
+  // ── Step 3: Auto-link shopkeeper profile ─────────────────────────────────
   if (newUser.role === 'shopkeeper') {
-    // Try to find an existing unlinked shopkeeper created by Admin
-    let existingShop = await Shopkeeper.findOne({ 
+    let existingShop = await Shopkeeper.findOne({
       $or: [{ phone: newUser.phone }, { owner: newUser.name }],
       userId: { $exists: false }
     });
@@ -286,36 +317,14 @@ export const signup = catchAsync(async (req, res) => {
       await existingShop.save();
     } else {
       await Shopkeeper.create({
-        name: newUser.name + " Store",
+        name: newUser.name + ' Store',
         owner: newUser.name,
         email: newUser.email,
         userId: newUser._id,
         phone: newUser.phone,
-        loc: "Pending",
+        loc: 'Pending',
         status: 'active'
       });
-    }
-  }
-
-  const payload = {
-    id: newUser._id.toString(),
-    role: newUser.role,
-    email: newUser.email,
-    tokenVersion: newUser.tokenVersion || 0
-  };
-
-  if (isFirebaseInitialized && auth) {
-    try {
-      const firebaseUser = await auth.createUser({
-        email: email.toLowerCase(),
-        password,
-        displayName: name,
-      });
-      newUser.firebaseUid = firebaseUser.uid;
-      await newUser.save();
-    } catch (firebaseErr) {
-      await User.findByIdAndDelete(newUser._id);
-      throw AppError.validation('Failed to create user in Firebase: ' + firebaseErr.message);
     }
   }
 
@@ -327,10 +336,18 @@ export const signup = catchAsync(async (req, res) => {
     ipAddress: req.ip
   });
 
+  // ── Step 4: Issue JWT session ─────────────────────────────────────────────
+  const payload = {
+    id: newUser._id.toString(),
+    role: newUser.role,
+    email: newUser.email,
+    tokenVersion: newUser.tokenVersion || 0
+  };
+
   const { accessToken, refreshToken } = generateTokenPair(payload);
   const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
   const userAgent = req.headers['user-agent'] || 'Unknown Device';
-  
+
   await Session.create({
     user: newUser._id,
     refreshTokenHash,
