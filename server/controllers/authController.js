@@ -40,7 +40,8 @@ export const login = catchAsync(async (req, res) => {
         const fbData = await fbRes.json();
         if (!fbRes.ok || fbData.error) {
           // If the user doesn't exist in Firebase but exists in MongoDB, we migrate them.
-          if (fbData.error && fbData.error.message === 'EMAIL_NOT_FOUND') {
+          // Note: Firebase uses INVALID_LOGIN_CREDENTIALS for both missing emails and wrong passwords now to prevent enumeration
+          if (fbData.error && (fbData.error.message === 'EMAIL_NOT_FOUND' || fbData.error.message === 'INVALID_LOGIN_CREDENTIALS')) {
             // Wait for MongoDB password verification below. If it succeeds, we'll create the Firebase account.
             req.needsFirebaseMigration = true;
           } else {
