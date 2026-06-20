@@ -1,11 +1,11 @@
 import React from 'react';
 import C from '../theme';
-import EmptyState from './common/EmptyState';
+import { EmptyState } from './ui';
 
 export function ApiError({ error, hint = 'Run: npm run server (and npm run server:seed once)' }) {
   if (!error) return null;
   return (
-    <div style={{
+    <div style={ {
       padding: '12px 16px',
       marginBottom: 16,
       borderRadius: 8,
@@ -15,11 +15,11 @@ export function ApiError({ error, hint = 'Run: npm run server (and npm run serve
       fontSize: 13,
     }}>
       <strong>Could not load data.</strong> {error.message || String(error)}
-      <div style={{ marginTop: 4, fontSize: 12, color: C.muted }}>{hint}</div>
+      <div style={ { marginTop: 4, fontSize: 12, color: C.muted }}>{hint}</div>
     </div>
   );
 }
 
 export function ApiEmpty({ message = 'No records yet.', title = 'No Data', icon = '📭' }) {
-  return <EmptyState title={title} message={message} icon={icon} />;
+  return <EmptyState title={title} description={message} icon={icon} />;
 }

@@ -18,7 +18,7 @@ export default class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
+        <div style={ {
           minHeight: '100vh',
           display: 'flex',
           alignItems: 'center',
@@ -27,7 +27,7 @@ export default class ErrorBoundary extends React.Component {
           padding: 20,
           fontFamily: "'DM Sans', sans-serif"
         }}>
-          <div style={{
+          <div style={ {
             background: C.card,
             padding: 40,
             borderRadius: 16,
@@ -37,12 +37,12 @@ export default class ErrorBoundary extends React.Component {
             width: '100%',
             boxShadow: 'var(--shadow-lg)'
           }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-            <h2 style={{ margin: '0 0 16px', color: C.text, fontSize: 24, fontWeight: 800 }}>Something went wrong.</h2>
-            <p style={{ color: C.muted, marginBottom: 24, fontSize: 14 }}>
+            <div style={ { fontSize: 48, marginBottom: 16 }}>⚠️</div>
+            <h2 style={ { margin: '0 0 16px', color: C.text, fontSize: 24, fontWeight: 800 }}>Something went wrong.</h2>
+            <p style={ { color: C.muted, marginBottom: 24, fontSize: 14 }}>
               The application encountered an unexpected error. Please refresh the page or try again later.
             </p>
-            <div style={{
+            <div style={ {
               background: C.dBg,
               color: C.danger,
               padding: 12,
@@ -57,7 +57,7 @@ export default class ErrorBoundary extends React.Component {
             </div>
             <button
               onClick={() => window.location.reload()}
-              style={{
+              style={ {
                 padding: '12px 24px',
                 background: C.gold,
                 color: '#fff',

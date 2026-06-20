@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search, Plus, UserPlus, Filter, X } from 'lucide-react';
 import C from '../theme';
 import Badge from '../components/Badge';
 import SectionHeader from '../components/SectionHeader';
-import SearchBar from '../components/SearchBar';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
-import { THead, TRow, TCell } from '../components/Table';
+import DataGrid from '../components/DataGrid';
 import { userApi } from '../api/userApi';
+import { EnterpriseModal, Typography, Button } from '../components/ui';
 
 const ALL_ROLES = ['admin', 'shopkeeper', 'salesman', 'supplier'];
 
@@ -24,7 +25,7 @@ function Toast({ message, type, onClose }) {
   return (
     <div
       role="status"
-      style={{
+      style={ {
         position: 'fixed',
         bottom: 24,
         right: 24,
@@ -43,7 +44,7 @@ function Toast({ message, type, onClose }) {
       <button
         type="button"
         onClick={onClose}
-        style={{
+        style={ {
           marginLeft: 12,
           background: 'transparent',
           border: 'none',
@@ -63,12 +64,12 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: '', email: '', password: '', role: 'shopkeeper' });
   const [inviting, setInviting] = useState(false);
   const [actionId, setActionId] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [viewActivityUser, setViewActivityUser] = useState(null);
 
@@ -95,16 +96,8 @@ export default function UserManagement() {
   }, [loadUsers]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return users.filter(u => {
-      if (roleFilter !== 'all' && u.role !== roleFilter) return false;
-      if (!q) return true;
-      return (
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q)
-      );
-    });
-  }, [users, search, roleFilter]);
+    return users.filter(u => roleFilter === 'all' || u.role === roleFilter);
+  }, [users, roleFilter]);
 
   const handleInvite = async () => {
     const { name, email, password, role } = inviteForm;
@@ -153,7 +146,7 @@ export default function UserManagement() {
 
     setActionId(user.id);
     try {
-      const res = await userApi.disableUser(user.id); // Reusing the same endpoint
+      const res = await userApi.disableUser(user.id);
       setUsers(prev => prev.filter(u => u.id !== user.id));
       showToast(res.message || 'User permanently deleted');
     } catch (e) {
@@ -186,12 +179,80 @@ export default function UserManagement() {
     boxSizing: 'border-box',
   };
 
+  const columns = useMemo(() => [
+    { header: 'Name', accessorKey: 'name', sortable: true, cell: (u) => (
+      <span style={ { fontWeight: 600 }}>
+        {u.name}
+        {u.isSuperAdmin && <span style={ { marginLeft: 6, fontSize: 10, color: C.gold }}>SUPER ADMIN</span>}
+      </span>
+    )},
+    { header: 'Email', accessorKey: 'email', sortable: true },
+    { header: 'Role', accessorKey: 'role', sortable: true, cell: (u) => {
+      const isActive = u.active !== false && u.status === 'active';
+      const busy = actionId === u.id || actionId === `reset-${u.id}`;
+      return u.isSuperAdmin ? (
+        <Badge s="admin" />
+      ) : (
+        <select
+          value={u.role}
+          disabled={busy || !isActive}
+          onChange={e => handleRoleChange(u, e.target.value)}
+          style={ {
+            ...inputStyle,
+            padding: '4px 8px',
+            fontSize: 12,
+            minWidth: 120,
+          }}
+        >
+          {ALL_ROLES.map(r => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      )
+    }},
+    { header: 'Status', accessorKey: 'status', sortable: true, cell: (u) => <Badge s={u.active === false ? 'suspended' : (u.isOnline ? 'online' : 'offline')} /> },
+    { header: 'Joined', accessorKey: 'joinedDate', sortable: true, cell: (u) => formatDate(u.joinedDate || u.createdAt) },
+    { header: 'Last login', accessorKey: 'lastLogin', sortable: true, cell: (u) => formatDate(u.lastLogin) },
+    { header: 'Actions', cell: (u) => {
+      const isActive = u.active !== false && u.status === 'active';
+      const busy = actionId === u.id || actionId === `reset-${u.id}`;
+      const btnBase = {
+        fontSize: 11, fontWeight: 600, borderRadius: 6, padding: '5px 10px',
+        background: 'transparent', cursor: 'pointer', whiteSpace: 'nowrap', textAlign: 'center',
+      };
+      return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          <button type="button" disabled={busy || !isActive} onClick={() => handleResetPassword(u)}
+            style={{ ...btnBase, border: `1px solid ${C.gold}`, color: C.gold, cursor: busy || !isActive ? 'not-allowed' : 'pointer' }}>
+            Reset
+          </button>
+          <button type="button" onClick={() => setSelectedUser(u)}
+            style={{ ...btnBase, border: `1px solid ${C.border}`, color: C.text }}>
+            Details
+          </button>
+          {!u.isSuperAdmin && isActive && (
+            <button type="button" disabled={busy} onClick={() => handleDelete(u)}
+              style={{ ...btnBase, border: `1px solid ${C.danger}`, color: C.danger, cursor: busy ? 'not-allowed' : 'pointer' }}>
+              Delete
+            </button>
+          )}
+          <button type="button" onClick={() => setViewActivityUser(u)}
+            style={{ ...btnBase, border: `1px solid ${C.border}`, color: C.text }}>
+            Activity
+          </button>
+        </div>
+      );
+    }}
+  ], [actionId]);
+
   if (loading && !users.length) {
     return <PageLoader label="Loading users..." />;
   }
 
   return (
-    <div className="page-enter">
+    <div className="page-enter" style={ { display: 'flex', flexDirection: 'column', height: '100%' }}>
       <SectionHeader
         title="User Management"
         btn="Create User"
@@ -201,28 +262,21 @@ export default function UserManagement() {
         }}
       />
 
-      <p style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+      <p style={ { fontSize: 12, color: C.muted, marginBottom: 14 }}>
         Manage Prime Oil staff and control system access.
       </p>
 
       <ApiError error={error} />
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16, alignItems: 'center' }}>
-        <div style={{ flex: '1 1 220px', minWidth: 200 }}>
-          <SearchBar
-            value={search}
-            onChange={setSearch}
-            placeholder="Search by name or email..."
-          />
-        </div>
+      <div style={ { display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16, alignItems: 'center' }}>
         <div>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>
+          <label style={ { display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>
             Filter by role
           </label>
           <select
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value)}
-            style={{ ...inputStyle, minWidth: 160, cursor: 'pointer' }}
+            style={ { ...inputStyle, minWidth: 160, cursor: 'pointer' }}
           >
             <option value="all">All roles</option>
             {ALL_ROLES.map(r => (
@@ -236,7 +290,7 @@ export default function UserManagement() {
 
       {showInvite && (
         <div
-          style={{
+          style={ {
             position: 'fixed',
             inset: 0,
             background: 'rgba(0,0,0,0.45)',
@@ -249,7 +303,7 @@ export default function UserManagement() {
           onClick={() => !inviting && setShowInvite(false)}
         >
           <div
-            style={{
+            style={ {
               background: C.card,
               borderRadius: 14,
               padding: 24,
@@ -259,12 +313,12 @@ export default function UserManagement() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 16 }}>
+            <div style={ { fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 16 }}>
               Create User
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={ { display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Full name</label>
+                <label style={ { fontSize: 11, fontWeight: 600, color: C.muted }}>Full name</label>
                 <input
                   type="text"
                   value={inviteForm.name}
@@ -273,7 +327,7 @@ export default function UserManagement() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Email</label>
+                <label style={ { fontSize: 11, fontWeight: 600, color: C.muted }}>Email</label>
                 <input
                   type="email"
                   value={inviteForm.email}
@@ -282,7 +336,7 @@ export default function UserManagement() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Password</label>
+                <label style={ { fontSize: 11, fontWeight: 600, color: C.muted }}>Password</label>
                 <input
                   type="password"
                   value={inviteForm.password}
@@ -292,7 +346,7 @@ export default function UserManagement() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Role</label>
+                <label style={ { fontSize: 11, fontWeight: 600, color: C.muted }}>Role</label>
                 <select
                   value={inviteForm.role}
                   onChange={e => setInviteForm({ ...inviteForm, role: e.target.value })}
@@ -306,15 +360,15 @@ export default function UserManagement() {
                 </select>
               </div>
             </div>
-            <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>
+            <p style={ { fontSize: 12, color: C.muted, marginTop: 12 }}>
               The user can log in immediately with the password provided.
             </p>
-            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <div style={ { display: 'flex', gap: 10, marginTop: 16 }}>
               <button
                 type="button"
                 onClick={handleInvite}
                 disabled={inviting}
-                style={{
+                style={ {
                   flex: 1,
                   padding: '10px',
                   background: inviting ? C.muted : C.gold,
@@ -331,7 +385,7 @@ export default function UserManagement() {
                 type="button"
                 disabled={inviting}
                 onClick={() => setShowInvite(false)}
-                style={{
+                style={ {
                   padding: '10px 16px',
                   background: 'transparent',
                   border: `1px solid ${C.border}`,
@@ -349,46 +403,46 @@ export default function UserManagement() {
 
       {viewActivityUser && (
         <div
-          style={{
+          style={ {
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex',
             alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20,
           }}
           onClick={() => setViewActivityUser(null)}
         >
           <div
-            style={{
+            style={ {
               background: C.card, borderRadius: 14, padding: 24, width: '100%', maxWidth: 500,
               border: `1px solid ${C.border}`, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
               boxShadow: '0 20px 40px rgba(0,0,0,0.15)'
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 16 }}>
+            <div style={ { fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 16 }}>
               Login Activity for {viewActivityUser.name}
             </div>
-            <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+            <div style={ { overflowY: 'auto', flex: 1, paddingRight: 4 }}>
               {viewActivityUser.loginHistory?.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={ { display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {viewActivityUser.loginHistory.slice().reverse().map((log, i) => (
-                    <div key={i} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{new Date(log.time).toLocaleString()}</span>
+                    <div key={i} style={ { padding: 12, border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg }}>
+                      <div style={ { display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={ { fontSize: 13, fontWeight: 600, color: C.text }}>{new Date(log.time).toLocaleString()}</span>
                         <Badge s={log.status || 'success'} />
                       </div>
-                      <div style={{ fontSize: 11, color: C.muted }}>IP: {log.ip || 'Unknown'}</div>
+                      <div style={ { fontSize: 11, color: C.muted }}>IP: {log.ip || 'Unknown'}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ padding: 20, textAlign: 'center', color: C.muted, fontSize: 13 }}>
+                <div style={ { padding: 20, textAlign: 'center', color: C.muted, fontSize: 13 }}>
                   No recent login activity found.
                 </div>
               )}
             </div>
-            <div style={{ marginTop: 20, textAlign: 'right' }}>
+            <div style={ { marginTop: 20, textAlign: 'right' }}>
               <button 
                 onClick={() => setViewActivityUser(null)} 
-                style={{ 
+                style={ { 
                   padding: '10px 24px', 
                   background: C.gold, 
                   border: 'none', 
@@ -407,122 +461,63 @@ export default function UserManagement() {
         </div>
       )}
 
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'auto' }}>
-        {filtered.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-            <THead
-              cols={[
-                'Name',
-                'Email',
-                'Role',
-                'Status',
-                'Joined',
-                'Last login',
-                'Actions',
-              ]}
-            />
-            <tbody>
-              {filtered.map(u => {
-                const isActive = u.active !== false && u.status === 'active';
-                const busy = actionId === u.id || actionId === `reset-${u.id}`;
-                return (
-                  <TRow key={u.id}>
-                    <TCell bold>
-                      {u.name}
-                      {u.isSuperAdmin && (
-                        <span style={{ marginLeft: 6, fontSize: 10, color: C.gold }}>SUPER ADMIN</span>
-                      )}
-                    </TCell>
-                    <TCell>{u.email}</TCell>
-                    <TCell>
-                      {u.isSuperAdmin ? (
-                        <Badge s="admin" />
-                      ) : (
-                        <select
-                          value={u.role}
-                          disabled={busy || !isActive}
-                          onChange={e => handleRoleChange(u, e.target.value)}
-                          style={{
-                            ...inputStyle,
-                            padding: '4px 8px',
-                            fontSize: 12,
-                            minWidth: 120,
-                          }}
-                        >
-                          {ALL_ROLES.map(r => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </TCell>
-                    <TCell>
-                      <Badge s={isActive ? 'active' : 'inactive'} />
-                    </TCell>
-                    <TCell>{formatDate(u.joinedDate || u.createdAt)}</TCell>
-                    <TCell>{formatDate(u.lastLogin)}</TCell>
-                    <td style={{ padding: '8px 12px' }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        <button
-                          type="button"
-                          disabled={busy || !isActive}
-                          onClick={() => handleResetPassword(u)}
-                          style={{
-                            padding: '5px 10px',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            borderRadius: 6,
-                            border: `1px solid ${C.border}`,
-                            background: C.goldBg,
-                            color: C.gold,
-                            cursor: busy || !isActive ? 'not-allowed' : 'pointer',
-                          }}
-                        >
-                          Reset Password
-                        </button>
-                        {!u.isSuperAdmin && isActive && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => handleDelete(u)}
-                            style={{
-                              padding: '5px 10px',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              borderRadius: 6,
-                              border: `1px solid ${C.danger}`,
-                              background: C.danger,
-                              color: '#fff',
-                              cursor: busy ? 'not-allowed' : 'pointer',
-                              boxShadow: '0 2px 4px rgba(220, 38, 38, 0.2)'
-                            }}
-                          >
-                            Delete
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setViewActivityUser(u)}
-                          style={{
-                            padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6,
-                            border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: 'pointer',
-                          }}
-                        >
-                          Activity
-                        </button>
-                      </div>
-                    </td>
-                  </TRow>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>
-            {users.length ? 'No users match your search or filter.' : 'No users yet. Invite someone to get started.'}
+      {selectedUser && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20,
+          }}
+          onClick={() => setSelectedUser(null)}
+        >
+          <div
+            style={{
+              background: C.card, borderRadius: 14, padding: 24, width: '100%', maxWidth: 420,
+              border: `1px solid ${C.border}`, boxShadow: '0 20px 40px rgba(0,0,0,0.15)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 18 }}>
+              User Details
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                ['Name', selectedUser.name],
+                ['Email', selectedUser.email],
+                ['Role', selectedUser.role],
+                ['Status', selectedUser.active !== false ? 'Active' : 'Inactive'],
+                ['Joined', selectedUser.joinedDate || selectedUser.createdAt ? new Date(selectedUser.joinedDate || selectedUser.createdAt).toLocaleDateString() : '—'],
+                ['Last Login', selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleString() : 'Never'],
+              ].map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{label}</span>
+                  <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{value}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 20, textAlign: 'right' }}>
+              <button
+                onClick={() => setSelectedUser(null)}
+                style={{
+                  padding: '10px 24px', background: C.gold, border: 'none', borderRadius: 8,
+                  color: '#fff', cursor: 'pointer', fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(212, 136, 10, 0.2)'
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
+
+      <div style={ { flex: 1, minHeight: 400 }}>
+        <DataGrid 
+          columns={columns}
+          data={filtered}
+          selectable={false}
+          emptyMessage={users.length ? 'No users match your search or filter.' : 'No users yet. Invite someone to get started.'}
+          rowHeight={84}
+        />
       </div>
 
       <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'success' })} />

@@ -1,5 +1,10 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 const WEAK_JWT_SECRETS = new Set(['default_secret', 'secret']);
 const MIN_JWT_SECRET_LENGTH = 32;
 
@@ -12,10 +17,10 @@ function fail(message) {
   throw err;
 }
 
-function assertJwtSecret(raw) {
+function assertSecret(raw, name) {
   if (!raw || typeof raw !== 'string') {
     fail(
-      'FATAL: JWT_SECRET is required. Set a cryptographically random string of at least 32 characters in your .env file.'
+      `FATAL: ${name} is required. Set a cryptographically random string of at least 32 characters in your .env file.`
     );
   }
 
@@ -23,13 +28,13 @@ function assertJwtSecret(raw) {
 
   if (secret.length < MIN_JWT_SECRET_LENGTH) {
     fail(
-      `FATAL: JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters (got ${secret.length}).`
+      `FATAL: ${name} must be at least ${MIN_JWT_SECRET_LENGTH} characters (got ${secret.length}).`
     );
   }
 
   if (WEAK_JWT_SECRETS.has(secret)) {
     fail(
-      'FATAL: JWT_SECRET is a known weak placeholder ("default_secret" / "secret"). Generate a strong random secret (min 32 characters).'
+      `FATAL: ${name} is a known weak placeholder ("default_secret" / "secret"). Generate a strong random secret (min 32 characters).`
     );
   }
 
@@ -66,10 +71,12 @@ function resolveMongoUri() {
 const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT) || 5000,
-  jwtSecret: assertJwtSecret(process.env.JWT_SECRET),
+  jwtSecret: assertSecret(process.env.JWT_SECRET, 'JWT_SECRET'),
+  refreshTokenSecret: assertSecret(process.env.REFRESH_TOKEN_SECRET, 'REFRESH_TOKEN_SECRET'),
   jwtExpire: process.env.JWT_EXPIRE || '24h',
   refreshTokenExpire: process.env.REFRESH_TOKEN_EXPIRE || '7d',
   mongodbUri: resolveMongoUri(),
+  redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379'
 };
 
 export default config;

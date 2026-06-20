@@ -1,219 +1,169 @@
 import React from 'react';
-import C from '../theme';
+import { NavLink, Link } from 'react-router-dom';
 import { NAV_ITEMS, NAV_BY_ROLE } from '../config/navigation';
 import { useTheme } from '../context/ThemeContext';
+import { useNotificationStore, useUIStore } from '../store';
+import { useAuth } from '../hooks/useAuth';
+import { Typography, Badge } from './ui';
+import { useQuery } from '@tanstack/react-query';
+import { userApi } from '../api/userApi';
+import { orderApi } from '../api/orderApi';
 
-export default function Sidebar({
-  user,
-  active,
-  onNav,
-  onLogout,
-  notifications = [],
-  mobileOpen = false,
-  onClose = () => {}
-}) {
+export default function Sidebar({ onLogout }) {
+  const { user } = useAuth();
   const { isDark, toggleTheme } = useTheme();
-  const navIds   = NAV_BY_ROLE[user.role] || NAV_BY_ROLE.admin;
+  
+  const notifications = useNotificationStore(state => state.notifications);
+  const mobileOpen = useUIStore(state => state.mobileMenuOpen);
+  const closeMobileMenu = useUIStore(state => state.closeMobileMenu);
+  
+  const navIds   = NAV_BY_ROLE[user?.role] || NAV_BY_ROLE.admin;
   const navItems = NAV_ITEMS.filter(n => navIds.includes(n.id));
+  
   const isVisible = n => {
+    if (!user) return false;
     if (user.role === 'admin') return true;
-    if (user.role === 'shopkeeper') return n.msg.toLowerCase().includes(user.name.toLowerCase());
+    if (user.role === 'shopkeeper') return n.msg?.toLowerCase().includes(user.name.toLowerCase());
     if (user.role === 'salesman') return n.type === 'payment' || n.type === 'order';
     if (user.role === 'supplier') return n.type === 'order';
     return true;
   };
+  
   const unread = notifications.filter(n => !(n.isRead ?? n.read) && isVisible(n)).length;
 
-  const [openComplaints, setOpenComplaints] = React.useState(0);
-  React.useEffect(() => {
-    if (user.role === 'admin' || user.role === 'shopkeeper') {
-      import('../api/userApi').then(({ userApi }) => {
-        userApi.getComplaints().then(res => {
-          const data = res.data || res;
-          if (Array.isArray(data)) {
-            const open = data.filter(c => c.status === 'pending' || c.status === 'processing').length;
-            setOpenComplaints(open);
-          }
-        }).catch(() => {});
-      });
-    }
-  }, [user]);
+  const { data: complaintsData } = useQuery({
+    queryKey: ['complaints'],
+    queryFn: () => userApi.getComplaints(),
+    enabled: user?.role === 'admin' || user?.role === 'shopkeeper',
+    refetchInterval: 30000
+  });
+
+  const { data: dispatchOrdersData } = useQuery({
+    queryKey: ['orders', { status: 'ready_for_dispatch' }],
+    queryFn: () => orderApi.getOrders({ status: 'ready_for_dispatch' }),
+    enabled: user?.role === 'admin' || user?.role === 'supplier'
+  });
+
+  const openComplaints = Array.isArray(complaintsData?.data || complaintsData) 
+    ? (complaintsData?.data || complaintsData).filter(c => c.status === 'pending' || c.status === 'processing').length 
+    : 0;
+    
+  const pendingDispatchOrders = Array.isArray(dispatchOrdersData?.data || dispatchOrdersData)
+    ? (dispatchOrdersData?.data || dispatchOrdersData).length
+    : 0;
+
+  if (!user) return null;
 
   return (
     <>
-      {/* Mobile background overlay click catcher */}
       {mobileOpen && (
         <div
-          className="sidebar-overlay"
-          onClick={onClose}
+          className="fixed inset-0 w-full h-full bg-[#0d2a14]/40 backdrop-blur-sm z-[999] lg:hidden"
+          onClick={closeMobileMenu}
           aria-hidden="true"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(13, 42, 20, 0.4)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 999
-          }}
         />
       )}
 
       <aside
-        className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}
+        className={`sidebar flex flex-col overflow-hidden h-full bg-sidebar min-w-[226px] w-[226px] z-[1000] border-r border-sidebar-border transition-transform duration-300 ease-in-out ${mobileOpen ? 'translate-x-0 fixed' : 'max-md:-translate-x-full max-md:fixed relative translate-x-0'}`}
         role="navigation"
         aria-label="Main dashboard menu"
-        style={{
-          width: 226,
-          minWidth: 226,
-          background: C.sb,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          height: '100%'
-        }}
       >
-        {/* Logo */}
-        <div style={{ padding: '16px 14px 10px', borderBottom: `1px solid ${C.sbBorder}`, flexShrink: 0 }}>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.15rem', color: '#F5C842' }}>
-            Prime <em style={{ color: '#D4880A' }}>Oil</em>
+        <div className="py-4 px-3.5 border-b border-sidebar-border shrink-0">
+          <div className="font-serif text-[1.15rem] text-gold font-bold">
+            Prime <em className="text-gold-dark not-italic">Oil</em>
           </div>
-          <div style={{ fontSize: 9, color: 'rgba(253,246,227,0.28)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 1 }}>
+          <div className="text-[9px] text-[#fdf6e3]/30 tracking-widest uppercase mt-0.5 font-medium">
             Management System
           </div>
         </div>
 
-        {/* User Info Card */}
-        <div 
-          onClick={() => {
-            onNav('profile');
-            onClose();
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          style={{ padding: '12px 14px', borderBottom: `1px solid ${C.sbBorder}`, display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s ease' }}
+        <Link 
+          to="profile"
+          onClick={closeMobileMenu}
+          className="py-3 px-3.5 border-b border-sidebar-border flex items-center gap-3 shrink-0 cursor-pointer transition-colors duration-200 no-underline hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
         >
-          <div style={{ position: 'relative' }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: 'rgba(212,136,10,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, fontWeight: 700, color: '#F5C842', flexShrink: 0,
-              border: `1.5px solid ${C.goldBorder}`,
-              overflow: 'hidden'
-            }} aria-hidden="true">
+          <div className="relative">
+            <div className="w-9 h-9 rounded-full bg-gold-dark/20 flex items-center justify-center text-base font-bold text-gold shrink-0 border-1.5 border-gold-border overflow-hidden" aria-hidden="true">
               {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="User Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={user.avatarUrl} alt="User Avatar" className="w-full h-full object-cover" />
               ) : (
                 user.name.charAt(0).toUpperCase()
               )}
             </div>
-            <div style={{
-              position: 'absolute', bottom: -2, right: -2, width: 10, height: 10,
-              background: C.success, borderRadius: '50%', border: `2px solid ${C.sb}`,
-            }} title="Active Status"></div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-success rounded-full border-2 border-sidebar" title="Active Status"></div>
           </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(253,246,227,0.95)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div className="overflow-hidden">
+            <div className="text-[13px] font-semibold text-[#fdf6e3]/95 truncate">
               {user.name}
             </div>
-            <div style={{ fontSize: 11, color: 'rgba(253,246,227,0.4)', textTransform: 'capitalize' }}>
+            <div className="text-[11px] text-[#fdf6e3]/40 capitalize">
               {user.role}
             </div>
           </div>
-        </div>
+        </Link>
 
-        {/* Nav links links list */}
-        <nav style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {navItems.map(item => {
-            const isActive = active === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  onNav(item.id);
-                  onClose(); // Automatically close mobile drawer on click
-                }}
-                className={`nav-btn${isActive ? ' active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 14px', borderRadius: 9, border: 'none',
-                  cursor: 'pointer',
-                  background: isActive ? 'rgba(212,136,10,0.15)' : 'transparent',
-                  color: isActive ? '#F5C842' : 'rgba(253,246,227,0.85)',
-                  textAlign: 'left', position: 'relative',
-                  whiteSpace: 'nowrap', fontSize: 14,
-                  fontWeight: isActive ? 600 : 500,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {isActive && (
-                  <div style={{
-                    position: 'absolute', left: 0, top: '14%',
-                    width: 3, height: '72%',
-                    background: C.gold, borderRadius: '0 3px 3px 0',
-                  }} />
-                )}
-                {item.label}
-                {item.id === 'notifications' && unread > 0 && (
-                  <span
-                    style={{
-                      marginLeft: 'auto',
-                      background: C.danger, color: 'white',
-                      fontSize: 9, borderRadius: 8, padding: '2px 6px', fontWeight: 700,
-                    }}
-                    aria-label={`${unread} unread notifications`}
-                  >
-                    {unread}
-                  </span>
-                )}
-                {item.id === 'complaints' && openComplaints > 0 && (
-                  <span
-                    style={{
-                      marginLeft: 'auto',
-                      background: C.danger, color: 'white',
-                      fontSize: 9, borderRadius: 8, padding: '2px 6px', fontWeight: 700,
-                    }}
-                    aria-label={`${openComplaints} open complaints`}
-                  >
-                    {openComplaints}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5">
+          {navItems.map(item => (
+            <NavLink
+              key={item.id}
+              to={item.path}
+              onClick={closeMobileMenu}
+              className={({ isActive }) => `flex items-center gap-3 py-2.5 px-3.5 rounded-lg border-none cursor-pointer text-left relative whitespace-nowrap text-sm transition-all duration-150 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${isActive ? 'bg-gold/15 text-gold font-semibold' : 'bg-transparent text-[#fdf6e3]/85 hover:text-white font-medium'}`}
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <div className="absolute left-0 top-[14%] w-[3px] h-[72%] bg-gold rounded-r-sm" />
+                  )}
+                  {item.label}
+                  {item.id === 'notifications' && unread > 0 && (
+                    <span
+                      className="ml-auto bg-danger text-white text-[9px] rounded-lg py-0.5 px-1.5 font-bold"
+                      aria-label={`${unread} unread notifications`}
+                    >
+                      {unread}
+                    </span>
+                  )}
+                  {item.id === 'complaints' && openComplaints > 0 && (
+                    <span
+                      className="ml-auto bg-danger text-white text-[9px] rounded-lg py-0.5 px-1.5 font-bold"
+                      aria-label={`${openComplaints} open complaints`}
+                    >
+                      {openComplaints}
+                    </span>
+                  )}
+                  {item.id === 'dispatch' && pendingDispatchOrders > 0 && (
+                    <span
+                      className="ml-auto bg-danger text-white text-[9px] rounded-lg py-0.5 px-1.5 font-bold"
+                      aria-label={`${pendingDispatchOrders} ready to dispatch`}
+                    >
+                      {pendingDispatchOrders}
+                    </span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
         </nav>
 
-        {/* Controls */}
-        <div style={{ padding: '8px', borderTop: `1px solid ${C.sbBorder}`, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="p-2 border-t border-sidebar-border shrink-0 flex flex-col gap-1">
           <button
+            type="button"
             onClick={toggleTheme}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 14px', borderRadius: 9, border: 'none',
-              cursor: 'pointer', background: 'transparent',
-              color: 'rgba(253,246,227,0.85)', width: '100%', fontSize: 14,
-              fontWeight: 500, transition: 'all 0.15s ease',
-            }}
+            className="flex items-center justify-between py-2.5 px-3.5 rounded-lg border-none cursor-pointer bg-transparent text-[#fdf6e3]/85 hover:text-white w-full text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
             aria-label="Toggle dark mode"
           >
-            <span>{isDark ? 'Dark Mode' : 'Light Mode'}</span>
-            <div style={{ width: 36, height: 20, background: isDark ? C.gold : 'rgba(255,255,255,0.2)', borderRadius: 20, position: 'relative', transition: 'background 0.3s ease' }}>
-              <div style={{ position: 'absolute', top: 2, left: isDark ? 18 : 2, width: 16, height: 16, background: '#fff', borderRadius: '50%', transition: 'left 0.3s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+            <span>Dark Mode</span>
+            <div className={`w-9 h-5 rounded-full relative transition-colors duration-300 ${isDark ? 'bg-gold' : 'bg-white/20'}`}>
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${isDark ? 'left-[18px]' : 'left-0.5'}`} />
             </div>
           </button>
           
           <button
+            type="button"
             onClick={onLogout}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '10px 14px', borderRadius: 9, border: 'none',
-              cursor: 'pointer', background: 'transparent',
-              color: 'rgba(253,246,227,0.85)', width: '100%', fontSize: 14,
-              fontWeight: 500, transition: 'all 0.15s ease',
-            }}
+            className="flex items-center gap-3 py-2.5 px-3.5 rounded-lg border-none cursor-pointer bg-transparent text-[#fdf6e3]/85 hover:text-white w-full text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
             aria-label="Logout from account"
           >
             Logout

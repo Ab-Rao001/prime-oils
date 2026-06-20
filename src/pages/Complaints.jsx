@@ -1,18 +1,51 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import C from '../theme';
-import Badge from '../components/Badge';
+import React, { useMemo, useState } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
 import { useFetch } from '../hooks/useFetch';
 import { userApi } from '../api/userApi';
 import { inventoryApi } from '../api/inventoryApi';
+import { useComplaints } from '../queries/useComplaints';
+import { useConvertComplaintToReturn } from '../mutations/useReturnMutations';
+import ConvertComplaintModal from '../components/returns/ConvertComplaintModal';
+import { Badge, Typography, Button, Input, Select } from '../components/ui';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const complaintSchema = z.object({
+  product: z.string().optional().nullable(),
+  targetUser: z.string().optional().nullable(),
+  type: z.enum(['damaged', 'order', 'exchange', 'quality', 'delivery', 'behaviour']),
+  issue: z.string().min(1, 'Issue description is required'),
+});
+
+const STATUS_LABEL = {
+  pending: 'Pending',
+  in_review: 'In Review',
+  processing: 'In Review',
+  resolved: 'Resolved',
+  converted_to_return: 'Converted to Return',
+  escalated: 'Escalated',
+  closed_no_action: 'Closed',
+};
 
 export default function Complaints({ role, user }) {
-  const { data: cmps, setData: setCmps, loading, error } = useFetch(() => userApi.getComplaints(), []);
+  const { data: cmps = [], isPending, error, refetch } = useComplaints();
   const { data: products } = useFetch(() => inventoryApi.getProducts(), []);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ product: '', type: 'damaged', issue: '' });
+  const [convertTarget, setConvertTarget] = useState(null);
+  const { mutate: convertToReturn, isPending: converting } = useConvertComplaintToReturn();
+
+  const { data: usersData } = useFetch(() => userApi.getUsers(), []);
+  const staff = (usersData?.data || []).filter(u => ['salesman', 'supplier'].includes(u.role));
+
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm({
+    resolver: zodResolver(complaintSchema),
+    defaultValues: { product: '', targetUser: '', type: 'damaged', issue: '' },
+  });
+
+  const selectedType = watch('type');
 
   const visible = useMemo(() => {
     if (role === 'shopkeeper' && user?.name) return cmps.filter(c => c.shop === user.name);
@@ -21,41 +54,40 @@ export default function Complaints({ role, user }) {
 
   const update = async (id, status) => {
     try {
-      const updated = await userApi.updateComplaint(id, { status });
-      setCmps(prev => prev.map(c => c.id === id ? updated : c));
-    } catch {
-      setCmps(prev => prev.map(c => c.id === id ? { ...c, status } : c));
-    }
-  };
-
-  const registerComplaint = async () => {
-    if (!form.product || !form.issue) return;
-    const maxNum = Math.max(
-      0,
-      ...cmps.map(c => Number(String(c.id).replace(/\D/g, '')) || 0)
-    );
-    const id = `CMP-${String(maxNum + 1).padStart(3, '0')}`;
-    const d = new Date();
-    const date = d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).split(',')[0];
-
-    try {
-      const created = await userApi.createComplaint({
-        shop: user?.name || 'Unknown Shop',
-        product: form.product,
-        issue: form.issue,
-        type: form.type,
-        status: 'pending',
-        date,
-      });
-      setCmps(prev => [...prev, created]);
-      setForm({ product: '', type: 'damaged', issue: '' });
-      setShowForm(false);
+      await userApi.updateComplaint(id, { status });
+      refetch();
     } catch (e) {
       console.error(e);
     }
   };
 
-  if (loading) return <PageLoader label="Loading complaints..." />;
+  const registerComplaint = async (data) => {
+    const d = new Date();
+    const date = d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).split(',')[0];
+
+    try {
+      await userApi.createComplaint({
+        shop: user?.name || 'Unknown Shop',
+        product: data.type === 'behaviour' ? null : data.product,
+        targetUser: data.type === 'behaviour' ? data.targetUser : null,
+        issue: data.issue,
+        type: data.type,
+        status: 'pending',
+        date,
+      });
+      reset({ product: '', targetUser: '', type: 'damaged', issue: '' });
+      setShowForm(false);
+      refetch();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConvert = (body) => {
+    convertToReturn(body, { onSuccess: () => setConvertTarget(null) });
+  };
+
+  if (isPending) return <PageLoader label="Loading complaints..." />;
 
   return (
     <div className="page-enter">
@@ -67,112 +99,138 @@ export default function Complaints({ role, user }) {
       />
 
       {showForm && role !== 'admin' && (
-        <div style={{ position: 'relative', marginBottom: 18 }}>
-          <div style={{ background: C.card, border: `1px solid ${C.goldBorder}`, borderRadius: 12, padding: 18, marginTop: 8 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>New Complaint</div>
+        <div className="relative mb-5 animate-fadeIn">
+          <div className="bg-card border border-gold/30 rounded-xl p-5 mt-2">
+            <Typography variant="body" weight="bold" className="text-foreground mb-4 block">New Complaint</Typography>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Product</label>
-                <select
-                  value={form.product}
-                  onChange={e => setForm({ ...form, product: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: 'none' }}
-                >
+            <form onSubmit={handleSubmit(registerComplaint)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {selectedType === 'behaviour' ? (
+                <Select label="Against (Salesman/Supplier)" {...register('targetUser')} error={errors.targetUser}>
+                  <option value="">Select person...</option>
+                  {staff.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </Select>
+              ) : (
+                <Select label="Product" {...register('product')} error={errors.product}>
                   <option value="">Select product...</option>
                   {products.map(p => (
                     <option key={p.id} value={p.name}>{p.name}</option>
                   ))}
-                </select>
+                </Select>
+              )}
+              <Select label="Type" {...register('type')} error={errors.type}>
+                {['damaged', 'order', 'exchange', 'quality', 'delivery', 'behaviour'].map(t => (
+                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+              </Select>
+              <div className="md:col-span-2">
+                <Input label="Issue" placeholder="Describe the issue..." {...register('issue')} error={errors.issue} />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Type</label>
-                <select
-                  value={form.type}
-                  onChange={e => setForm({ ...form, type: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: 'none' }}
-                >
-                  {['damaged', 'order', 'exchange'].map(t => (
-                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                  ))}
-                </select>
+              <div className="flex gap-3 mt-2 md:col-span-2">
+                <Button type="submit" isLoading={isSubmitting} className="flex-1">Submit</Button>
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)} disabled={isSubmitting} className="flex-1">Cancel</Button>
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Issue</label>
-                <input
-                  value={form.issue}
-                  onChange={e => setForm({ ...form, issue: e.target.value })}
-                  placeholder="Describe the issue..."
-                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg, color: C.text, outline: 'none' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-              <button onClick={registerComplaint} style={{ flex: 1, padding: '9px 12px', background: C.gold, border: 'none', borderRadius: 10, color: 'white', cursor: 'pointer', fontWeight: 700 }}>
-                Submit
-              </button>
-              <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: '9px 12px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, cursor: 'pointer', fontWeight: 600 }}>
-                Cancel
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Summary row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 18 }}>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         {[
-          { label: 'Pending',    color: C.warn,    key: 'pending'    },
-          { label: 'Processing', color: C.info,    key: 'processing' },
-          { label: 'Resolved',   color: C.success, key: 'resolved'   },
-          { label: 'Total',      color: C.gold,    key: null         },
-        ].map(({ label, color, key }) => (
-          <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color }}>
-              {key ? visible.filter(c => c.status === key).length : visible.length}
-            </div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{label}</div>
+          { label: 'Pending', key: 'pending', colorClass: 'text-warn' },
+          { label: 'In Review', key: 'in_review', colorClass: 'text-info' },
+          { label: 'Resolved', key: 'resolved', colorClass: 'text-success' },
+          { label: 'Total', key: null, colorClass: 'text-gold' },
+        ].map(({ label, colorClass, key }) => (
+          <div key={label} className="bg-card border border-border dark:border-border-dark rounded-xl p-3 text-center">
+            <Typography variant="h2" size="2xl" className={`font-bold ${colorClass}`}>
+              {key
+                ? visible.filter(c => c.status === key || (key === 'in_review' && c.status === 'processing')).length
+                : visible.length}
+            </Typography>
+            <Typography variant="caption" className="text-muted-foreground mt-1 block">{label}</Typography>
           </div>
         ))}
       </div>
 
-      {/* Complaint cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="flex flex-col gap-3">
         {visible.map(c => (
-          <div key={c.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '15px 18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+          <div key={c.id} className="bg-card border border-border dark:border-border-dark rounded-xl py-3.5 px-4.5">
+            <div className="flex justify-between items-start flex-wrap gap-2">
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{c.id || 'CMP-###'}</span>
-                  <Badge s={c.type || 'unknown'} />
-                  <Badge s={c.status || 'unknown'} />
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <Typography variant="body" weight="bold" className="text-foreground text-[13px]">{c.id || 'CMP-###'}</Typography>
+                  <Badge variant="default">{c.type || 'unknown'}</Badge>
+                  <Badge variant={
+                    c.status === 'resolved' ? 'success'
+                      : ['processing', 'in_review'].includes(c.status) ? 'info'
+                        : c.status === 'converted_to_return' ? 'success'
+                          : 'warning'
+                  }>
+                    {STATUS_LABEL[c.status] || c.status}
+                  </Badge>
+                  {c.returnRequestId && (
+                    <Badge variant="info">RMA linked</Badge>
+                  )}
                 </div>
-                <div style={{ fontSize: 13, color: C.muted, marginBottom: 2 }}>Shop: <span style={{ color: C.text, fontWeight: 500 }}>{c.shop}</span></div>
-                <div style={{ fontSize: 13, color: C.muted, marginBottom: 2 }}>Product: <span style={{ color: C.text }}>{c.product}</span></div>
-                <div style={{ fontSize: 13, color: C.muted }}>Issue: <span style={{ color: C.text }}>{c.issue}</span></div>
+                {c.shop && (
+                  <Typography variant="body" className="text-muted-foreground text-[13px] mb-0.5 block">
+                    Shop: <span className="text-foreground font-medium">{c.shop}</span>
+                  </Typography>
+                )}
+                {c.type === 'behaviour' && c.targetUser ? (
+                  <Typography variant="body" className="text-muted-foreground text-[13px] mb-0.5 block">
+                    Against: <span className="text-danger font-medium">{c.targetUser.name || c.targetUser}</span>
+                  </Typography>
+                ) : c.product && (
+                  <Typography variant="body" className="text-muted-foreground text-[13px] mb-0.5 block">
+                    Product: <span className="text-foreground">{c.product}</span>
+                  </Typography>
+                )}
+                <Typography variant="body" className="text-muted-foreground text-[13px] block">
+                  Issue: <span className="text-foreground">{c.issue}</span>
+                </Typography>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 11, color: C.muted }}>{c.date}</span>
+              <div className="flex flex-col gap-1.5 items-end">
+                <Typography variant="caption" className="text-muted-foreground">{c.date}</Typography>
                 {role === 'admin' && (
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div className="flex gap-1.5 flex-wrap justify-end">
                     {c.status === 'pending' && (
-                      <button onClick={() => update(c.id, 'processing')} style={{ padding: '4px 10px', background: C.iBg, border: 'none', borderRadius: 6, color: C.info, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
-                        Process
-                      </button>
+                      <Button size="xs" variant="outline" onClick={() => update(c.id, 'in_review')}>
+                        Review
+                      </Button>
                     )}
-                    {c.status !== 'resolved' && (
-                      <button onClick={() => update(c.id, 'resolved')} style={{ padding: '4px 10px', background: C.sBg, border: 'none', borderRadius: 6, color: C.success, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
+                    {['pending', 'in_review', 'processing'].includes(c.status) && !c.returnRequestId && (
+                      <Button size="xs" variant="primary" onClick={() => setConvertTarget(c)}>
+                        Create Return
+                      </Button>
+                    )}
+                    {!['resolved', 'converted_to_return', 'closed_no_action'].includes(c.status) && (
+                      <Button size="xs" variant="outline" className="text-success border-success/30" onClick={() => update(c.id, 'resolved')}>
                         Resolve
-                      </button>
+                      </Button>
                     )}
                   </div>
+                )}
+                {role === 'salesman' && !c.returnRequestId && ['in_review', 'processing', 'pending'].includes(c.status) && (
+                  <Button size="xs" variant="primary" onClick={() => setConvertTarget(c)}>
+                    Create Return
+                  </Button>
                 )}
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      <ConvertComplaintModal
+        isOpen={!!convertTarget}
+        onClose={() => setConvertTarget(null)}
+        complaint={convertTarget}
+        onSubmit={handleConvert}
+        isLoading={converting}
+      />
     </div>
   );
 }

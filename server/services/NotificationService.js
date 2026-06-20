@@ -2,12 +2,23 @@ import Notification from '../models/Notification.js';
 
 class NotificationService {
   /**
-   * Send a notification to specific users or broadcast to a role.
-   * @param {Object} payload 
-   * @param {Array<string>} userIds 
-   * @param {string} role 
+   * Add notification to background queue.
    */
   async send(payload, userIds = [], role = null, session = null) {
+    try {
+      const { notificationQueue } = await import('./QueueService.js');
+      // session cannot be serialized to redis, omit it for async processing
+      await notificationQueue.add('sendNotification', { payload, userIds, role });
+    } catch (e) {
+      // Fallback to direct send if queue fails or redis is unavailable
+      await this.sendDirect(payload, userIds, role, session);
+    }
+  }
+
+  /**
+   * Directly send notification (called by Worker).
+   */
+  async sendDirect(payload, userIds = [], role = null, session = null) {
     const {
       title,
       message,

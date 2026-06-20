@@ -3,14 +3,15 @@ import Shopkeeper from '../models/Shopkeeper.js';
 import Order from '../models/Order.js';
 import User from '../models/User.js';
 import { formatPayment } from '../utils/format.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import { cache } from '../utils/cache.js';
 import { runInTransaction } from '../utils/transaction.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import NotificationService from '../services/NotificationService.js';
+import AuditService from '../services/AuditService.js';
 
-async function buildPaymentListFilter(user) {
+async function buildPaymentScope(user) {
   const filter = {};
   if (user.role === 'shopkeeper') {
     const userDoc = await User.findById(user.id);
@@ -27,39 +28,53 @@ async function buildPaymentListFilter(user) {
 }
 
 export const getPayments = catchAsync(async (req, res) => {
-  const page = req.query.page ? parseInt(req.query.page, 10) : null;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+  const { page, limit, skip } = getPagination(req.query);
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'paymentId', 'total', 'paid', 'due', 'status'], { paymentId: 1 });
 
-  const filter = await buildPaymentListFilter(req.user);
-  const cacheKey = `payments:list:role:${req.user.role}:user:${req.user.id}:page:${page || 'all'}:limit:${limit || 'all'}`;
+  const filter = await buildPaymentScope(req.user);
+  const cacheKey = `payments:list:role:${req.user.role}:user:${req.user.id}:page:${page}:limit:${limit}:sort:${JSON.stringify(sort)}`;
   const cachedData = await cache.get(cacheKey);
   if (cachedData) {
     return res.json(cachedData);
   }
 
-  let responseData;
+  const [docs, total] = await Promise.all([
+    Payment.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .populate('shop')
+      .lean(),
+    Payment.countDocuments(filter)
+  ]);
 
-  if (page || limit) {
-    const paginatedResult = await paginate(Payment, filter, {
+  const responseData = {
+    data: docs.map(formatPayment),
+    pagination: {
       page,
       limit,
-      sort: { paymentId: 1 },
-      populate: 'shop',
-    });
-    responseData = {
-      data: paginatedResult.data.map(formatPayment),
-      pagination: paginatedResult.pagination,
-    };
-  } else {
-    const docs = await Payment.find(filter)
-      .sort({ paymentId: 1 })
-      .populate('shop')
-      .lean();
-    responseData = docs.map(formatPayment);
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  };
+
+  await cache.set(cacheKey, responseData, 10);
+  res.json(responseData);
+});
+
+export const getPayment = catchAsync(async (req, res) => {
+  const id = req.params.id || req.params.paymentId;
+  const scope = await buildPaymentScope(req.user);
+  const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { paymentId: id };
+  
+  const payment = await Payment.findOne({ ...query, ...scope }).populate('shop').lean();
+  if (!payment) {
+    throw AppError.notFound('Payment not found or access denied');
   }
 
-  await cache.set(cacheKey, responseData, 60);
-  res.json(responseData);
+  res.json(formatPayment(payment));
 });
 
 export const createPayment = catchAsync(async (req, res) => {
@@ -68,7 +83,7 @@ export const createPayment = catchAsync(async (req, res) => {
 
   let shopId = req.validatedBody.shop;
   if (typeof shopId === 'string' && !shopId.match(/^[0-9a-fA-F]{24}$/)) {
-    const sk = await Shopkeeper.findOne({ name: shopId });
+    const sk = await Shopkeeper.findOne({ $or: [{ name: shopId }, { owner: shopId }] });
     if (!sk) throw AppError.validation(`Shopkeeper not found: ${shopId}`);
     shopId = sk._id;
   }
@@ -105,10 +120,17 @@ export const createPayment = catchAsync(async (req, res) => {
       }
 
       isOrderFullyPaid = totalAlreadyPaid + paidVal >= orderDoc.total;
-
-      if (isOrderFullyPaid) {
-        await Order.findByIdAndUpdate(orderRefId, { status: 'paid' }, { session });
-      }
+      const newPaymentStatus = isOrderFullyPaid ? 'paid' : ((totalAlreadyPaid + paidVal > 0) ? 'partial' : 'pending');
+      
+      const updatedOrder = await Order.findOneAndUpdate(
+        { _id: orderRefId, __v: orderDoc.__v },
+        { 
+          $set: { paymentStatus: newPaymentStatus, paidAmount: totalAlreadyPaid + paidVal },
+          $inc: { __v: 1 }
+        },
+        { new: true, session }
+      );
+      if (!updatedOrder) throw AppError.conflict('Order was updated concurrently');
     }
 
     const calculatedStatus =
@@ -125,6 +147,15 @@ export const createPayment = catchAsync(async (req, res) => {
       status: calculatedStatus,
     }], { session });
 
+    await AuditService.log({
+      user: req.user.id,
+      action: 'CREATE_PAYMENT',
+      collectionName: 'Payment',
+      documentId: created[0]._id,
+      newValue: { paymentId, paid: paidVal, total: totalVal },
+      session
+    });
+
     return created[0];
   });
 
@@ -133,14 +164,16 @@ export const createPayment = catchAsync(async (req, res) => {
     await cache.del('orders:list:*');
   }
 
-  const populatedDoc = await Payment.findById(doc._id).populate('shop');
+  const populatedDoc = await Payment.findOne({ _id: doc._id, ...scope }).populate('shop');
   res.status(201).json(formatPayment(populatedDoc));
 });
 
 export const updatePayment = catchAsync(async (req, res) => {
   const updates = { ...req.validatedBody };
+  const scope = await buildPaymentScope(req.user);
+
   if (updates.shop && typeof updates.shop === 'string' && !updates.shop.match(/^[0-9a-fA-F]{24}$/)) {
-    const sk = await Shopkeeper.findOne({ name: updates.shop });
+    const sk = await Shopkeeper.findOne({ $or: [{ name: updates.shop }, { owner: updates.shop }] });
     if (sk) updates.shop = sk._id;
   }
   if (updates.order && typeof updates.order === 'string' && !updates.order.match(/^[0-9a-fA-F]{24}$/)) {
@@ -148,9 +181,11 @@ export const updatePayment = catchAsync(async (req, res) => {
     if (ord) updates.order = ord._id;
   }
 
+  const query = req.params.paymentId.match(/^[0-9a-fA-F]{24}$/) ? { _id: req.params.paymentId } : { paymentId: req.params.paymentId };
+
   const updatedDoc = await runInTransaction(async (session) => {
-    const payment = await Payment.findOne({ paymentId: req.params.paymentId }).session(session);
-    if (!payment) throw AppError.notFound('Payment not found');
+    const payment = await Payment.findOne({ ...query, ...scope }).session(session);
+    if (!payment) throw AppError.notFound('Payment not found or access denied');
 
     const totalVal = updates.total !== undefined ? updates.total : payment.total;
     const paidVal = updates.paid !== undefined ? updates.paid : payment.paid;
@@ -177,24 +212,47 @@ export const updatePayment = catchAsync(async (req, res) => {
       }
 
       const isOrderFullyPaid = otherPaidSum + paidVal >= orderDoc.total;
-      const newOrderStatus = isOrderFullyPaid ? 'paid' : 'pending';
-      await Order.findByIdAndUpdate(orderId, { status: newOrderStatus }, { session });
+      const newPaymentStatus = isOrderFullyPaid ? 'paid' : ((otherPaidSum + paidVal > 0) ? 'partial' : 'pending');
+      
+      const updatedOrder = await Order.findOneAndUpdate(
+        { _id: orderId, __v: orderDoc.__v },
+        { 
+          $set: { paymentStatus: newPaymentStatus, paidAmount: otherPaidSum + paidVal },
+          $inc: { __v: 1 }
+        },
+        { new: true, session }
+      );
+      if (!updatedOrder) throw AppError.conflict('Order was updated concurrently');
     }
 
-    Object.assign(payment, updates);
-    if (updates.order === null) {
-      payment.order = undefined;
-    }
+    const newPaymentStatus = paidVal >= totalVal ? 'paid' : (paidVal > 0 ? 'partial' : 'pending');
 
-    payment.status = paidVal >= totalVal ? 'paid' : (paidVal > 0 ? 'partial' : 'pending');
-    await payment.save({ session });
-    return payment;
+    const finalUpdates = { ...updates, status: newPaymentStatus };
+    if (updates.order === null) finalUpdates.order = undefined;
+
+    const savedPayment = await Payment.findOneAndUpdate(
+      { _id: payment._id, __v: payment.__v },
+      { $set: finalUpdates, $inc: { __v: 1 } },
+      { new: true, session }
+    );
+    if (!savedPayment) throw AppError.conflict('Payment was updated concurrently');
+
+    await AuditService.log({
+      user: req.user.id,
+      action: 'UPDATE_PAYMENT',
+      collectionName: 'Payment',
+      documentId: savedPayment._id,
+      newValue: updates,
+      session
+    });
+
+    return savedPayment;
   });
 
   await cache.del('payments:list:*');
   await cache.del('orders:list:*');
 
-  const populatedDoc = await Payment.findById(updatedDoc._id).populate('shop');
+  const populatedDoc = await Payment.findOne({ _id: updatedDoc._id, ...scope }).populate('shop');
   res.json(formatPayment(populatedDoc));
 });
 
@@ -215,7 +273,7 @@ export const payOrder = catchAsync(async (req, res) => {
 
   const add = Number(amount);
 
-  const payment = await runInTransaction(async (session) => {
+  const updatedPayment = await runInTransaction(async (session) => {
     let p = await Payment.findOne({ order: orderDoc._id }).session(session);
     if (!p) {
       const payCount = await Payment.countDocuments().session(session);
@@ -232,20 +290,50 @@ export const payOrder = catchAsync(async (req, res) => {
     }
 
     if (p.paid + add > p.total) {
-      throw AppError.validation('Payment amount exceeds order remaining total or payment changed concurrently');
+      throw AppError.validation('Payment amount exceeds order remaining total');
     }
 
-    p.paid += add;
-    p.status = p.paid >= p.total ? 'paid' : 'partial';
-    await p.save({ session });
-    
-    const updatedPayment = p;
+    const newPaidAmount = p.paid + add;
+    const newStatus = newPaidAmount >= p.total ? 'paid' : 'partial';
 
-    if (updatedPayment.status === 'paid') {
-      await Order.findByIdAndUpdate(orderDoc._id, { status: 'paid' }, { session });
+    // Atomic update of Payment with OCC
+    const pUpdated = await Payment.findOneAndUpdate(
+      { _id: p._id, __v: p.__v, paid: { $lte: p.total - add } },
+      { 
+        $inc: { paid: add, __v: 1 },
+        $set: { status: newStatus }
+      },
+      { new: true, session }
+    );
+
+    if (!pUpdated) {
+      throw AppError.conflict('Payment was modified concurrently');
     }
 
-    return updatedPayment;
+    // Atomic update of Order with OCC
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderDoc._id, __v: orderDoc.__v },
+      { 
+        $set: { paymentStatus: newStatus, paidAmount: newPaidAmount },
+        $inc: { __v: 1 }
+      },
+      { new: true, session }
+    );
+
+    if (!updatedOrder) {
+      throw AppError.conflict('Order was modified concurrently');
+    }
+
+    await AuditService.log({
+      user: req.user.id,
+      action: 'PAYMENT_MADE',
+      collectionName: 'Payment',
+      documentId: pUpdated._id,
+      newValue: { amountPaid: add, currentTotalPaid: pUpdated.paid },
+      session
+    });
+
+    return pUpdated;
   });
 
   // Phase 6: Notify Shopkeeper
@@ -259,7 +347,7 @@ export const payOrder = catchAsync(async (req, res) => {
         type: 'PAYMENT',
         priority: 'HIGH',
         module: 'Payment',
-        documentId: payment._id,
+        documentId: updatedPayment._id,
         sender: req.user.id
       }, [shopUser._id]);
     }
@@ -272,12 +360,12 @@ export const payOrder = catchAsync(async (req, res) => {
     type: 'PAYMENT',
     priority: 'MEDIUM',
     module: 'Payment',
-    documentId: payment._id,
+    documentId: updatedPayment._id,
     sender: req.user.id
   }, null, 'admin');
 
   await cache.del('payments:list:*');
   await cache.del('orders:list:*');
 
-  res.json({ success: true, data: formatPayment(payment) });
+  res.json({ success: true, data: formatPayment(updatedPayment) });
 });

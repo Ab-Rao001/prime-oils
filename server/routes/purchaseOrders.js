@@ -4,11 +4,11 @@ import Product from '../models/Product.js';
 import User from '../models/User.js';
 import { runInTransaction } from '../utils/transaction.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import validate from '../middleware/validate.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import { createPurchaseOrderSchema, updatePurchaseOrderSchema } from '../validators/purchaseOrder.validator.js';
 import StockService from '../services/StockService.js';
 import AuditService from '../services/AuditService.js';
@@ -18,35 +18,41 @@ const router = Router();
 router.use(authenticate);
 
 // Get all POs
-router.get('/', authorize('admin', 'supplier'), catchAsync(async (req, res) => {
-  const page = req.query.page ? parseInt(req.query.page, 10) : null;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+router.get('/', requirePermission('inventory.read'), catchAsync(async (req, res) => {
+  const { page, limit, skip } = getPagination(req.query);
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'poId', 'totalAmount', 'status'], { createdAt: -1 });
 
   const filter = { isDeleted: { $ne: true } };
   if (req.user.role === 'supplier') {
     filter.supplier = req.user.id;
   }
 
-  if (page || limit) {
-    const paginatedResult = await paginate(PurchaseOrder, filter, {
-      page,
-      limit,
-      sort: { createdAt: -1 },
-      populate: ['supplier', 'items.productId'],
-    });
-    res.json(paginatedResult);
-  } else {
-    const docs = await PurchaseOrder.find(filter)
-      .sort({ createdAt: -1 })
+  const [docs, total] = await Promise.all([
+    PurchaseOrder.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
       .populate('supplier', 'name email')
       .populate('items.productId', 'name sku')
-      .lean();
-    res.json(docs);
-  }
+      .lean(),
+    PurchaseOrder.countDocuments(filter)
+  ]);
+
+  res.json({
+    data: docs,
+    pagination: {
+      page,
+      limit,
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  });
 }));
 
 // Create PO
-router.post('/', authorize('admin'), validate(createPurchaseOrderSchema), catchAsync(async (req, res) => {
+router.post('/', requirePermission('inventory.write'), validate(createPurchaseOrderSchema), catchAsync(async (req, res) => {
   const count = await PurchaseOrder.countDocuments();
   const poId = `PO-${String(count + 1).padStart(4, '0')}`;
 
@@ -99,7 +105,7 @@ router.post('/', authorize('admin'), validate(createPurchaseOrderSchema), catchA
 }));
 
 // Mark PO as received (Stock In)
-router.patch('/:id/receive', authorize('admin'), catchAsync(async (req, res) => {
+router.patch('/:id/receive', requirePermission('stock.receive'), catchAsync(async (req, res) => {
   const doc = await runInTransaction(async (session) => {
     const po = await PurchaseOrder.findById(req.params.id).session(session);
     if (!po) throw AppError.notFound('Purchase Order not found');
@@ -146,7 +152,7 @@ router.patch('/:id/receive', authorize('admin'), catchAsync(async (req, res) => 
 }));
 
 // Update PO details (like cancelling)
-router.patch('/:id', authorize('admin'), validate(updatePurchaseOrderSchema), catchAsync(async (req, res) => {
+router.patch('/:id', requirePermission('inventory.write'), validate(updatePurchaseOrderSchema), catchAsync(async (req, res) => {
   const updates = req.validatedBody;
   
   if (updates.status === 'received') {

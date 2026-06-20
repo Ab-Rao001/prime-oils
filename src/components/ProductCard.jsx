@@ -1,6 +1,5 @@
 import React from 'react';
-import C from '../theme';
-import Badge from './Badge';
+import { Badge, Typography } from './ui';
 
 export function formatProductPrice(price) {
   const n = Number(price);
@@ -12,85 +11,52 @@ export default function ProductCard({ product, showStock = true }) {
   const lowStock = product.stock < product.min;
 
   return (
-    <article style={{
-      background: C.card,
-      border: `1px solid ${lowStock ? `${C.danger}44` : C.border}`,
-      borderRadius: 14,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
+    <article className={`bg-card rounded-xl overflow-hidden flex flex-col border ${lowStock ? 'border-danger/30 dark:border-danger/40' : 'border-border dark:border-border-dark'}`}>
       {product.imageUrl ? (
-        <div style={{
-          height: 150,
-          background: 'linear-gradient(180deg, #faf8f4 0%, #f0ebe0 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-        }}>
+        <div className="h-[150px] flex items-center justify-center relative bg-gradient-to-b from-[#faf8f4] to-[#f0ebe0] dark:from-[#2a2d24] dark:to-[#1e2019]">
           <img
             src={product.imageUrl}
             alt={product.name}
-            style={{ maxHeight: 130, maxWidth: '88%', objectFit: 'contain' }}
+            className="max-h-[130px] max-w-[88%] object-contain"
           />
-          {product.size ? (
-            <span style={{
-              position: 'absolute',
-              top: 10,
-              left: 10,
-              background: C.gold,
-              color: '#fff',
-              fontSize: 10,
-              fontWeight: 700,
-              padding: '4px 8px',
-              borderRadius: 6,
-            }}>
+          {product.size && (
+            <span className="absolute top-2.5 left-2.5 bg-gold text-white text-[10px] font-bold py-1 px-2 rounded-md">
               {product.size}
             </span>
-          ) : null}
+          )}
         </div>
       ) : (
-        <div style={{
-          height: 100,
-          background: C.goldBg,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 36,
-        }}>
+        <div className="h-[100px] bg-gold/10 flex items-center justify-center text-4xl">
           🛢️
         </div>
       )}
 
-      <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{product.name}</div>
-        {product.description ? (
-          <p style={{ fontSize: 12, color: C.muted, margin: '6px 0 0', lineHeight: 1.45 }}>{product.description}</p>
-        ) : null}
-        <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+      <div className="p-4 flex-1 flex flex-col">
+        <Typography variant="body" weight="bold" className="text-foreground text-sm">{product.name}</Typography>
+        
+        {product.description && (
+          <Typography variant="body" className="text-muted-foreground text-xs mt-1.5 leading-relaxed">{product.description}</Typography>
+        )}
+        
+        <Typography variant="caption" className="text-muted-foreground mt-2 block">
           {product.cat}{product.unit ? ` · ${product.unit}` : ''}
-        </div>
+        </Typography>
 
-        <div style={{
-          marginTop: 'auto',
-          paddingTop: 12,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-end',
-        }}>
+        <div className="mt-auto pt-3 flex justify-between items-end">
           <div>
-            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Price</div>
-            <div style={{ fontWeight: 800, fontSize: 18, color: C.gold }}>{formatProductPrice(product.price)}</div>
+            <Typography variant="caption" className="text-muted-foreground uppercase tracking-widest text-[10px] block">Price</Typography>
+            <Typography variant="h3" size="lg" className="font-extrabold text-gold">{formatProductPrice(product.price)}</Typography>
           </div>
-          {showStock ? (
-            <div style={{ textAlign: 'right' }}>
-              <Badge s={lowStock ? 'overdue' : 'active'} />
-              <div style={{ fontSize: 12, color: lowStock ? C.danger : C.text, marginTop: 4, fontWeight: 600 }}>
+          {showStock && (
+            <div className="text-right">
+              <Badge variant={lowStock ? 'danger' : 'success'}>
+                {lowStock ? 'overdue' : 'active'}
+              </Badge>
+              <Typography variant="body" weight="semibold" className={`text-xs mt-1 block ${lowStock ? 'text-danger' : 'text-foreground'}`}>
                 Stock: {product.stock ?? '—'}
-              </div>
+              </Typography>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </article>

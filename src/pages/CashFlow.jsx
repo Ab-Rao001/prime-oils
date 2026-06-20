@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import C from '../theme';
 import SectionHeader from '../components/SectionHeader';
 import { useFetch } from '../hooks/useFetch';
 import { analyticsApi } from '../api/analyticsApi';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
+import { Typography } from '../components/ui';
 
 export default function CashFlow({ role }) {
   const [dateRange, setDateRange] = useState('all');
@@ -29,13 +30,13 @@ export default function CashFlow({ role }) {
     return (
       <div className="page-enter">
         <SectionHeader title="Profit & Loss Analytics" />
-        <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>Calculating Ledger...</div>
+        <div className="p-10 text-center text-muted-foreground">Calculating Ledger...</div>
       </div>
     );
   }
 
   if (error) {
-    return <div className="page-enter"><div style={{color: C.danger}}>Failed to load analytics</div></div>;
+    return <div className="page-enter"><div className="text-danger">Failed to load analytics</div></div>;
   }
 
   const { revenue, cogs, grossProfit, totalExpenses, netProfit, expenseBreakdown } = pnl;
@@ -48,23 +49,24 @@ export default function CashFlow({ role }) {
   const COLORS = [C.primary, C.gold, C.danger, C.success, '#8884d8', '#82ca9d'];
 
   return (
-    <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="page-enter flex flex-col gap-6">
       <SectionHeader title="Profit & Loss Analytics" />
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+      <div className="flex gap-3 mb-2">
           {['all', 'month', 'week'].map(r => (
               <button 
                 key={r}
                 onClick={() => setDateRange(r)}
                 style={{
-                    padding: '8px 16px',
-                    borderRadius: 20,
-                    border: `1px solid ${dateRange === r ? C.primary : C.border}`,
-                    background: dateRange === r ? `${C.primary}22` : C.card,
-                    color: dateRange === r ? C.primary : C.text,
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    textTransform: 'capitalize'
+                  padding: '8px 16px',
+                  borderRadius: '9999px',
+                  border: `1px solid ${dateRange === r ? C.gold : C.border}`,
+                  backgroundColor: dateRange === r ? C.goldBg : C.card,
+                  color: dateRange === r ? C.gold : C.text,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  textTransform: 'capitalize',
+                  transition: 'all 0.2s'
                 }}
               >
                   {r === 'all' ? 'All Time' : r === 'month' ? 'This Month' : 'Last 7 Days'}
@@ -72,32 +74,32 @@ export default function CashFlow({ role }) {
           ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-        <div style={{ background: C.card, padding: 20, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8 }}>Total Revenue</div>
-          <div style={{ fontSize: 24, color: C.text, fontWeight: 700 }}>PKR {revenue.toLocaleString()}</div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+        <div className="bg-card p-5 rounded-xl border border-border dark:border-border-dark shadow-sm">
+          <Typography variant="caption" className="text-muted-foreground font-semibold uppercase block mb-2">Total Revenue</Typography>
+          <Typography variant="h2" size="2xl" className="text-foreground font-bold">PKR {revenue.toLocaleString()}</Typography>
         </div>
-        <div style={{ background: C.card, padding: 20, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8 }}>Cost of Goods Sold</div>
-          <div style={{ fontSize: 24, color: C.danger, fontWeight: 700 }}>PKR {cogs.toLocaleString()}</div>
+        <div className="bg-card p-5 rounded-xl border border-border dark:border-border-dark shadow-sm">
+          <Typography variant="caption" className="text-muted-foreground font-semibold uppercase block mb-2">Cost of Goods Sold</Typography>
+          <Typography variant="h2" size="2xl" className="text-danger font-bold">PKR {cogs.toLocaleString()}</Typography>
         </div>
-        <div style={{ background: C.card, padding: 20, borderRadius: 12, border: `1.5px solid ${C.primary}`, boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 13, color: C.primary, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8 }}>Gross Profit</div>
-          <div style={{ fontSize: 28, color: C.text, fontWeight: 700 }}>PKR {grossProfit.toLocaleString()}</div>
+        <div style={{ borderColor: C.goldBorder }} className="bg-card p-5 rounded-xl border-2 shadow-sm">
+          <Typography variant="caption" style={{ color: C.gold }} className="font-semibold uppercase block mb-2">Gross Profit</Typography>
+          <Typography variant="h2" size="3xl" className="text-foreground font-bold">PKR {grossProfit.toLocaleString()}</Typography>
         </div>
-        <div style={{ background: C.card, padding: 20, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8 }}>Operating Expenses</div>
-          <div style={{ fontSize: 24, color: C.danger, fontWeight: 700 }}>PKR {totalExpenses.toLocaleString()}</div>
+        <div className="bg-card p-5 rounded-xl border border-border dark:border-border-dark shadow-sm">
+          <Typography variant="caption" className="text-muted-foreground font-semibold uppercase block mb-2">Operating Expenses</Typography>
+          <Typography variant="h2" size="2xl" className="text-danger font-bold">PKR {totalExpenses.toLocaleString()}</Typography>
         </div>
-        <div style={{ background: C.card, padding: 20, borderRadius: 12, border: `2px solid ${netProfit >= 0 ? C.success : C.danger}`, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: 13, color: netProfit >= 0 ? C.success : C.danger, fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>NET PROFIT</div>
-          <div style={{ fontSize: 32, color: C.text, fontWeight: 800 }}>PKR {netProfit.toLocaleString()}</div>
+        <div className={`bg-card p-5 rounded-xl border-2 shadow-sm ${netProfit >= 0 ? 'border-success' : 'border-danger'}`}>
+          <Typography variant="caption" className={`font-bold uppercase block mb-2 ${netProfit >= 0 ? 'text-success' : 'text-danger'}`}>NET PROFIT</Typography>
+          <Typography variant="h2" size="4xl" className="text-foreground font-extrabold">PKR {netProfit.toLocaleString()}</Typography>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          <div style={{ flex: 2, minWidth: 400, background: C.card, padding: 24, borderRadius: 12, border: `1px solid ${C.border}` }}>
-              <h3 style={{ margin: '0 0 20px 0', fontSize: 16, color: C.text }}>Profit Flow</h3>
+      <div className="flex gap-6 flex-wrap">
+          <div className="flex-[2] min-w-[400px] bg-card p-6 rounded-xl border border-border dark:border-border-dark">
+              <Typography variant="h3" className="m-0 mb-5 text-foreground block">Profit Flow</Typography>
               <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={[
                       { name: 'Revenue', value: revenue, fill: C.primary },
@@ -121,8 +123,8 @@ export default function CashFlow({ role }) {
               </ResponsiveContainer>
           </div>
 
-          <div style={{ flex: 1, minWidth: 300, background: C.card, padding: 24, borderRadius: 12, border: `1px solid ${C.border}` }}>
-              <h3 style={{ margin: '0 0 20px 0', fontSize: 16, color: C.text }}>Expense Breakdown</h3>
+          <div className="flex-1 min-w-[300px] bg-card p-6 rounded-xl border border-border dark:border-border-dark">
+              <Typography variant="h3" className="m-0 mb-5 text-foreground block">Expense Breakdown</Typography>
               {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
@@ -144,7 +146,7 @@ export default function CashFlow({ role }) {
                     </PieChart>
                 </ResponsiveContainer>
               ) : (
-                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted }}>No expenses logged in this period</div>
+                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">No expenses logged in this period</div>
               )}
           </div>
       </div>

@@ -1,6 +1,6 @@
 import Product from '../models/Product.js';
 import { formatProduct } from '../utils/format.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import { cache } from '../utils/cache.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
@@ -10,18 +10,22 @@ import AuditService from '../services/AuditService.js';
 import StockService from '../services/StockService.js';
 
 export const getProducts = catchAsync(async (req, res) => {
-  const page = req.query.page ? parseInt(req.query.page, 10) : null;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+  const { page, limit, skip } = getPagination(req.query);
   const q = req.query.q || '';
   const cat = req.query.cat || '';
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'name', 'price', 'cat', 'sku', 'stock'], { createdAt: -1 });
 
-  const cacheKey = `products:list:page:${page || 'all'}:limit:${limit || 'all'}:q:${q}:cat:${cat}`;
+  const cacheKey = `products:list:page:${page}:limit:${limit}:q:${q}:cat:${cat}:sort:${JSON.stringify(sort)}`;
   const cachedData = await cache.get(cacheKey);
   if (cachedData) {
     return res.json(cachedData);
   }
 
   const filter = { isActive: true, isDeleted: { $ne: true } };
+  if (req.user && req.user.role === 'supplier') {
+    filter.supplier = req.user.id;
+  }
+  
   if (q) {
     filter.$text = { $search: q };
   }
@@ -29,24 +33,29 @@ export const getProducts = catchAsync(async (req, res) => {
     filter.cat = cat;
   }
 
-  let responseData;
+  const sortCriteria = q ? { score: { $meta: 'textScore' } } : sort;
 
-  if (page || limit) {
-    const paginatedResult = await paginate(Product, filter, {
+  const [docs, total] = await Promise.all([
+    Product.find(filter)
+      .sort(sortCriteria)
+      .skip(skip)
+      .limit(limit)
+      .select('-description -longDescription -specs') // exclude heavy fields
+      .lean(),
+    Product.countDocuments(filter)
+  ]);
+
+  const responseData = {
+    data: docs.map(formatProduct),
+    pagination: {
       page,
       limit,
-      sort: q ? { score: { $meta: 'textScore' } } : { createdAt: -1 },
-    });
-    responseData = {
-      data: paginatedResult.data.map(formatProduct),
-      pagination: paginatedResult.pagination,
-    };
-  } else {
-    const docs = await Product.find(filter)
-      .sort(q ? { score: { $meta: 'textScore' } } : { createdAt: -1 })
-      .lean();
-    responseData = docs.map(formatProduct);
-  }
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  };
 
   await cache.set(cacheKey, responseData, 300);
   res.json(responseData);
@@ -55,7 +64,13 @@ export const getProducts = catchAsync(async (req, res) => {
 export const createProduct = catchAsync(async (req, res) => {
   const count = await Product.countDocuments();
   const sku = req.validatedBody.sku || `PROD-${String(count + 1).padStart(3, '0')}`;
-  const doc = await Product.create({ ...req.validatedBody, sku });
+  
+  const productData = { ...req.validatedBody, sku };
+  if (req.user && req.user.role === 'supplier') {
+    productData.supplier = req.user.id;
+  }
+  
+  const doc = await Product.create(productData);
 
   await AuditService.log({
     user: req.user.id,
@@ -71,8 +86,11 @@ export const createProduct = catchAsync(async (req, res) => {
 });
 
 export const uploadProductImage = catchAsync(async (req, res) => {
-  const doc = await Product.findOne(resolveProductQuery(req.params.id));
-  if (!doc) throw AppError.notFound('Product not found');
+  const query = resolveProductQuery(req.params.id);
+  if (req.user.role === 'supplier') query.supplier = req.user.id;
+  
+  const doc = await Product.findOne(query);
+  if (!doc) throw AppError.notFound('Product not found or access denied');
 
   if (doc.cloudinaryPublicId) {
     await destroyImage(doc.cloudinaryPublicId);
@@ -94,8 +112,11 @@ export const uploadProductImage = catchAsync(async (req, res) => {
 });
 
 export const deleteProductImage = catchAsync(async (req, res) => {
-  const doc = await Product.findOne(resolveProductQuery(req.params.id));
-  if (!doc) throw AppError.notFound('Product not found');
+  const query = resolveProductQuery(req.params.id);
+  if (req.user.role === 'supplier') query.supplier = req.user.id;
+
+  const doc = await Product.findOne(query);
+  if (!doc) throw AppError.notFound('Product not found or access denied');
 
   if (doc.cloudinaryPublicId) {
     await destroyImage(doc.cloudinaryPublicId);
@@ -113,8 +134,11 @@ export const deleteProductImage = catchAsync(async (req, res) => {
 });
 
 export const updateProduct = catchAsync(async (req, res) => {
-  const doc = await Product.findOneAndUpdate(resolveProductQuery(req.params.id), req.validatedBody, { new: true });
-  if (!doc) throw AppError.notFound('Product not found');
+  const query = resolveProductQuery(req.params.id);
+  if (req.user.role === 'supplier') query.supplier = req.user.id;
+
+  const doc = await Product.findOneAndUpdate(query, req.validatedBody, { new: true });
+  if (!doc) throw AppError.notFound('Product not found or access denied');
 
   await AuditService.log({
     user: req.user.id,
@@ -134,8 +158,11 @@ export const updateProductStock = catchAsync(async (req, res) => {
   const deltaNum = Number(delta);
   if (deltaNum === 0) throw AppError.validation('Delta cannot be 0');
 
-  const doc = await Product.findOne(resolveProductQuery(req.params.id));
-  if (!doc) throw AppError.notFound('Product not found');
+  const query = resolveProductQuery(req.params.id);
+  if (req.user.role === 'supplier') query.supplier = req.user.id;
+
+  const doc = await Product.findOne(query);
+  if (!doc) throw AppError.notFound('Product not found or access denied');
 
   // We must use Mongoose Session to ensure atomicity, but for now we wrap the moveStock.
   const session = await Product.startSession();
@@ -181,8 +208,11 @@ export const receiveProduct = catchAsync(async (req, res) => {
   if (quantityNum <= 0) throw AppError.validation('Received quantity must be strictly greater than 0');
   const costNum = unitCost ? Number(unitCost) : undefined;
 
-  const doc = await Product.findOne(resolveProductQuery(productId));
-  if (!doc) throw AppError.notFound('Product not found');
+  const query = resolveProductQuery(productId);
+  if (req.user.role === 'supplier') query.supplier = req.user.id;
+
+  const doc = await Product.findOne(query);
+  if (!doc) throw AppError.notFound('Product not found or access denied');
 
   const session = await Product.startSession();
   try {

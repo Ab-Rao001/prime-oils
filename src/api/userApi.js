@@ -17,6 +17,8 @@ export const userApi = {
 
   getCampaigns: params => request(buildUrl('/campaigns', params)),
   createCampaign: body => request('/campaigns', { method: 'POST', body: JSON.stringify(body) }),
+  deleteCampaign: id => request(`/campaigns/${id}`, { method: 'DELETE' }),
+  logCampaignSpend: (id, payload) => request(`/campaigns/${id}/spend`, { method: 'POST', body: JSON.stringify(payload) }),
 
   getUsers: async () => {
     const res = await request('/users');

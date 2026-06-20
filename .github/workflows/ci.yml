@@ -1,0 +1,69 @@
+name: Enterprise QA Certification
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7.0
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Server Dependencies
+        run: cd server && npm ci
+
+      - name: Start Server in Background
+        env:
+          PORT: 5005
+          MONGODB_URI: mongodb://localhost:27017/prime-oil-test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: testing-secret
+          JWT_REFRESH_SECRET: testing-refresh-secret
+          NODE_ENV: test
+        run: npm run server &
+        
+      - name: Wait for server to be ready
+        run: npx wait-on http://localhost:5005/api/health
+
+      - name: Frontend Linter & Accessibility Checks
+        run: npm run lint:a11y
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run E2E & Visual Regression Tests
+        run: npx playwright test
+
+      - name: Upload Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

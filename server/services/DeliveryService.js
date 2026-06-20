@@ -3,6 +3,7 @@ import DeliveryItem from '../models/DeliveryItem.js';
 import AuditService from './AuditService.js';
 import Notification from '../models/Notification.js';
 import Shopkeeper from '../models/Shopkeeper.js';
+import NotificationService from './NotificationService.js';
 
 class DeliveryService {
   /**
@@ -78,7 +79,15 @@ class DeliveryService {
        });
 
        if (newStatus === 'delivered') {
-           await Notification.create([{ type: 'delivery', msg: `Order ${order.orderId} fully delivered`, date: new Date().toISOString().slice(0, 10) }], { session });
+           await NotificationService.send({
+             title: 'Order Delivered', 
+             message: `Order ${order.orderId} fully delivered`, 
+             msg: `Order ${order.orderId} fully delivered`, // Backwards compatibility
+             type: 'DELIVERY', 
+             priority: 'MEDIUM',
+             module: 'Delivery',
+             documentId: order._id
+           }, null, 'all', session);
            
            // Phase 5: Reconcile Shopkeeper Credit
            if (order.shop) {
@@ -99,7 +108,15 @@ class DeliveryService {
               }
            }
        } else if (newStatus === 'partially_delivered') {
-           await Notification.create([{ type: 'delivery', msg: `Order ${order.orderId} partially delivered. Needs follow-up dispatch.`, date: new Date().toISOString().slice(0, 10) }], { session });
+           await NotificationService.send({
+             title: 'Order Partially Delivered', 
+             message: `Order ${order.orderId} partially delivered. Needs follow-up dispatch.`, 
+             msg: `Order ${order.orderId} partially delivered. Needs follow-up dispatch.`, // Backwards compatibility
+             type: 'DELIVERY', 
+             priority: 'HIGH',
+             module: 'Delivery',
+             documentId: order._id
+           }, null, 'all', session);
        }
     }
     

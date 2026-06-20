@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import Expense from '../models/Expense.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import validate from '../middleware/validate.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import { createExpenseSchema, updateExpenseSchema } from '../validators/expense.validator.js';
 import AuditService from '../services/AuditService.js';
 
@@ -14,29 +14,35 @@ const router = Router();
 router.use(authenticate);
 
 // Get all expenses
-router.get('/', authorize('admin'), catchAsync(async (req, res) => {
-  const page = req.query.page ? parseInt(req.query.page, 10) : null;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+router.get('/', requirePermission('reports.read'), catchAsync(async (req, res) => {
+  const { page, limit, skip } = getPagination(req.query);
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'date', 'amount', 'category'], { date: -1 });
 
-  if (page || limit) {
-    const paginatedResult = await paginate(Expense, {}, {
+  const [docs, total] = await Promise.all([
+    Expense.find()
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .populate('loggedBy', 'name email')
+      .lean(),
+    Expense.countDocuments()
+  ]);
+
+  res.json({
+    data: docs,
+    pagination: {
       page,
       limit,
-      sort: { date: -1 },
-      populate: ['loggedBy'],
-    });
-    res.json(paginatedResult);
-  } else {
-    const docs = await Expense.find()
-      .sort({ date: -1 })
-      .populate('loggedBy', 'name email')
-      .lean();
-    res.json(docs);
-  }
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  });
 }));
 
 // Create expense
-router.post('/', authorize('admin'), validate(createExpenseSchema), catchAsync(async (req, res) => {
+router.post('/', requirePermission('admin'), validate(createExpenseSchema), catchAsync(async (req, res) => {
   const data = req.validatedBody;
   data.loggedBy = req.user.id;
   
@@ -59,7 +65,7 @@ router.post('/', authorize('admin'), validate(createExpenseSchema), catchAsync(a
 }));
 
 // Update expense
-router.patch('/:id', authorize('admin'), validate(updateExpenseSchema), catchAsync(async (req, res) => {
+router.patch('/:id', requirePermission('admin'), validate(updateExpenseSchema), catchAsync(async (req, res) => {
   const data = req.validatedBody;
   if (data.date) {
       data.date = new Date(data.date);
@@ -82,7 +88,7 @@ router.patch('/:id', authorize('admin'), validate(updateExpenseSchema), catchAsy
 }));
 
 // Delete expense
-router.delete('/:id', authorize('admin'), catchAsync(async (req, res) => {
+router.delete('/:id', requirePermission('admin'), catchAsync(async (req, res) => {
   const expense = await Expense.findByIdAndDelete(req.params.id);
   if (!expense) throw AppError.notFound('Expense not found');
 

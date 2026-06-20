@@ -24,6 +24,8 @@ const orderSchema = new mongoose.Schema({
   },
   date: String,
   pay: { type: String, index: true },
+  paymentStatus: { type: String, enum: ['pending', 'partial', 'paid'], default: 'pending', index: true },
+  paidAmount: { type: Number, default: 0 },
   isDeleted: { type: Boolean, default: false, index: true },
   deletedAt: { type: Date },
   deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
@@ -32,6 +34,9 @@ const orderSchema = new mongoose.Schema({
 // Define indexes for scalability
 orderSchema.index({ status: 1, createdAt: -1 }); // Compound index for order dashboard queries
 orderSchema.index({ shop: 1, status: 1, createdAt: -1 }); // Compound index for customer order history lookup
+orderSchema.index({ shop: 1, createdAt: -1 });
+orderSchema.index({ man: 1, createdAt: -1 });
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 orderSchema.index({ man: 1, date: -1 }); // Compound index for salesman daily tracking
 orderSchema.index({ isDeleted: 1 }); // Index for soft deletes filtering
 

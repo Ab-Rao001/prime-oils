@@ -1,17 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
+import ForgotPassword from './ForgotPassword';
+import { Button, Input, Select, Typography, Alert } from '../components/ui';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import C from '../theme';
+
 const SUPER_ADMIN_EMAIL = 'admin@primeoil.com';
 const isSuperAdminEmail = (email) => email === SUPER_ADMIN_EMAIL;
-const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-import ForgotPassword from './ForgotPassword';
-import C from '../theme';
+
+const loginSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Please enter a valid email.'),
+  password: z.string().min(1, 'Password is required')
+});
+
+const signupSchema = z.object({
+  name: z.string().min(1, 'Full name is required'),
+  email: z.string().min(1, 'Email is required').email('Please enter a valid email.'),
+  password: z.string().min(8, 'Password must be at least 8 characters.'),
+  confirmPassword: z.string().min(1, 'Please confirm your password.'),
+  role: z.enum(['shopkeeper', 'salesman', 'supplier'])
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"]
+});
 
 export default function Auth({ defaultTab = 'login', onBack }) {
   const { login, signup } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [tab, setTab] = useState(location.state?.tab || defaultTab);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const { register: registerLogin, handleSubmit: handleLoginSubmit, formState: { errors: loginErrors } } = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' }
+  });
+
+  const { register: registerSignup, handleSubmit: handleSignupSubmit, formState: { errors: signupErrors } } = useForm({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { name: '', email: '', password: '', confirmPassword: '', role: 'shopkeeper' }
+  });
 
   useEffect(() => {
     if (location.state?.tab) {
@@ -19,96 +51,70 @@ export default function Auth({ defaultTab = 'login', onBack }) {
     }
   }, [location.state?.tab]);
 
-  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const inputStyle = {
-    width: '100%',
-    padding: '12px 14px',
-    background: 'rgba(255,255,255,0.08)',
-    border: `1px solid rgba(245,200,66,0.3)`,
-    borderRadius: 10,
-    color: '#FDF6E3',
-    fontSize: 14,
-    outline: 'none',
-    boxSizing: 'border-box',
-    transition: 'border 0.3s, background 0.3s',
+  const onLogin = async (data) => {
+    setLoading(true);
+    setError('');
+    try {
+      await login(data.email.trim().toLowerCase(), data.password);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const labelStyle = {
-    display: 'block',
-    color: 'rgba(245,200,66,0.9)',
-    marginBottom: 8,
-    fontWeight: 600,
+  const onSignup = async (data) => {
+    const email = data.email.trim().toLowerCase();
+
+    if (isSuperAdminEmail(email)) {
+      return setError(`This email is reserved for the super admin. Contact ${SUPER_ADMIN_EMAIL}.`);
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      await signup(data.name.trim(), email, data.password, data.confirmPassword, data.role);
+      setTab('login');
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: `linear-gradient(135deg, ${C.sb} 0%, ${C.sbBorder} 100%)`,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontFamily: "'DM Sans', sans-serif",
-      padding: 20,
-      position: 'relative',
-    }}>
+    <div className="min-h-screen flex items-center justify-center font-sans p-5 relative overflow-hidden bg-gradient-to-br from-sidebar to-sidebar-border">
       {/* Overlay */}
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        background: 'linear-gradient(135deg, rgba(13, 42, 20, 0.35) 0%, rgba(34, 68, 34, 0.30) 100%)',
-        zIndex: 0,
-      }} />
+      <div className="absolute inset-0 z-0 bg-gradient-to-br from-black/40 to-black/20" />
 
       {/* Form Container */}
-      <div style={{
-        width: '100%',
-        maxWidth: 480,
-        background: 'rgba(13, 42, 20, 0.85)',
-        backdropFilter: 'blur(10px)',
-        border: `1px solid ${C.goldBorder}`,
-        borderRadius: 16,
-        padding: '2.8rem 2.5rem',
-        position: 'relative',
-        zIndex: 1,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-      }}>
+      <div className="w-full max-w-[480px] bg-[#0d2a14]/85 backdrop-blur-md border border-gold-border rounded-2xl p-10 relative z-10 shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            style={{ background: 'none', border: 'none', color: 'rgba(245,200,66,0.8)', cursor: 'pointer', fontSize: 13, marginBottom: 12, padding: 0 }}
+            className="bg-transparent border-none text-gold/80 cursor-pointer text-[13px] mb-3 p-0 hover:text-gold transition-colors"
           >
-            ← Back
+            &larr; Back
           </button>
         )}
+        
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{
-            fontFamily: "'Playfair Display', serif",
-            fontSize: '1.5rem',
-            color: '#F5C842',
-            fontWeight: 700,
-            marginBottom: 8,
-          }}>
-            Prime <span style={{ color: '#D4880A', fontStyle: 'italic' }}>Oil</span>
+        <div className="text-center mb-8">
+          <div className="font-serif text-2xl text-gold font-bold mb-2">
+            Prime <span className="text-[#D4880A] italic">Oil</span>
           </div>
-          <div style={{
-            fontSize: 12,
-            color: 'rgba(245,200,66,0.7)',
-            letterSpacing: 2,
-            textTransform: 'uppercase',
-            fontWeight: 500,
-          }}>
+          <div className="text-xs text-gold/70 tracking-widest uppercase font-medium">
             Management System
           </div>
         </div>
 
         {/* Tab Navigation */}
         {tab !== 'forgot' && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 26, background: 'rgba(255,255,255,0.08)', padding: 6, borderRadius: 12 }}>
+          <div className="flex gap-2 mb-6 bg-white/10 p-1.5 rounded-xl">
             {[
               { key: 'login', label: 'Login' },
               { key: 'signup', label: 'Sign Up' },
@@ -119,18 +125,11 @@ export default function Auth({ defaultTab = 'login', onBack }) {
                   setTab(t.key);
                   setError('');
                 }}
-                style={{
-                  flex: 1,
-                  padding: '10px 12px',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  transition: 'all 0.3s',
-                  background: tab === t.key ? '#F5C842' : 'transparent',
-                  color: tab === t.key ? '#0D0A05' : 'rgba(253,246,227,0.7)',
-                }}
+                className={`flex-1 py-2.5 px-3 border-none rounded-lg cursor-pointer text-[13px] font-semibold transition-all duration-300 ${
+                  tab === t.key 
+                    ? 'bg-gold text-[#0D0A05] shadow-sm' 
+                    : 'bg-transparent text-[#FDF6E3]/70 hover:text-[#FDF6E3]'
+                }`}
               >
                 {t.label}
               </button>
@@ -140,194 +139,119 @@ export default function Auth({ defaultTab = 'login', onBack }) {
 
         {/* Login Form */}
         {tab === 'login' && (
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Email Address</label>
-              <input
-                type="email"
-                value={form.email || ''}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                onKeyPress={e => e.key === 'Enter' && !loading && handleLogin()}
-                placeholder="admin@primeoil.com"
-                style={inputStyle}
-              />
-            </div>
+          <form onSubmit={handleLoginSubmit(onLogin)} className="space-y-4 animate-fadeIn">
+            <Input 
+              label="Email Address" 
+              type="email" 
+              placeholder="admin@primeoil.com" 
+              {...registerLogin('email')} 
+              error={loginErrors.email}
+              className="bg-black/10 text-white border-gold/30 focus:border-gold"
+              labelClassName="text-gold/90"
+            />
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={labelStyle}>Password</label>
-              <input
-                type="password"
-                value={form.password || ''}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                onKeyPress={e => e.key === 'Enter' && !loading && handleLogin()}
-                placeholder="••••••••"
-                style={inputStyle}
-              />
-            </div>
+            <Input 
+              label="Password" 
+              type="password" 
+              placeholder="••••••••" 
+              {...registerLogin('password')} 
+              error={loginErrors.password}
+              className="bg-black/10 text-white border-gold/30 focus:border-gold"
+              labelClassName="text-gold/90"
+            />
 
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: loading ? C.muted : C.gold,
-                color: '#fff',
-                border: 'none',
-                borderRadius: 10,
-                fontSize: 14,
-                fontWeight: 700,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: `0 4px 14px ${C.goldBorder}`,
-                transition: 'all 0.3s',
-                marginBottom: error ? 12 : 16,
-              }}
+            {error && <Alert variant="danger" className="text-center">{error}</Alert>}
+
+            <Button
+              type="submit"
+              isLoading={loading}
+              className="w-full bg-gold hover:bg-gold-dark text-black font-bold shadow-[0_4px_14px_rgba(245,200,66,0.3)] border-none mt-2"
             >
               {loading ? 'Logging in...' : 'Login to Dashboard'}
-            </button>
+            </Button>
 
             <button
+              type="button"
               onClick={() => {
                 setTab('forgot');
                 setError('');
               }}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: 'transparent',
-                color: 'rgba(245,200,66,0.8)',
-                border: 'none',
-                borderRadius: 8,
-                fontSize: 12,
-                cursor: 'pointer',
-                transition: 'color 0.3s',
-              }}
-              onMouseEnter={e => e.target.style.color = '#F5C842'}
-              onMouseLeave={e => e.target.style.color = 'rgba(245,200,66,0.8)'}
+              className="w-full py-2.5 bg-transparent text-gold/80 border-none rounded-lg text-xs cursor-pointer transition-colors hover:text-gold mt-2"
             >
               Forgot Password?
             </button>
-
-            {error && (
-              <div style={{
-                marginTop: 14,
-                padding: 12,
-                borderRadius: 8,
-                background: 'rgba(239, 68, 68, 0.15)',
-                color: '#fca5a5',
-                fontSize: 12,
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                textAlign: 'center',
-              }}>
-                {error}
-              </div>
-            )}
-          </div>
+          </form>
         )}
 
         {/* Signup Form */}
         {tab === 'signup' && (
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Full Name</label>
-              <input
-                type="text"
-                value={form.name || ''}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="John Doe"
-                style={inputStyle}
+          <form onSubmit={handleSignupSubmit(onSignup)} className="space-y-4 animate-fadeIn">
+            <Input 
+              label="Full Name" 
+              placeholder="John Doe" 
+              {...registerSignup('name')} 
+              error={signupErrors.name}
+              className="bg-black/10 text-white border-gold/30 focus:border-gold"
+              labelClassName="text-gold/90"
+            />
+
+            <Input 
+              label="Email Address" 
+              type="email" 
+              placeholder="your@email.com" 
+              {...registerSignup('email')} 
+              error={signupErrors.email}
+              className="bg-black/10 text-white border-gold/30 focus:border-gold"
+              labelClassName="text-gold/90"
+            />
+
+            <div className="space-y-1">
+              <Input 
+                label="Password" 
+                type="password" 
+                placeholder="••••••••" 
+                {...registerSignup('password')} 
+                error={signupErrors.password}
+                className="bg-black/10 text-white border-gold/30 focus:border-gold"
+                labelClassName="text-gold/90"
               />
+              {!signupErrors.password && (
+                <Typography variant="caption" className="text-gold/60 block mt-1">Min 8 characters</Typography>
+              )}
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Email Address</label>
-              <input
-                type="email"
-                value={form.email || ''}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                placeholder="your@email.com"
-                style={inputStyle}
-              />
-            </div>
+            <Input 
+              label="Confirm Password" 
+              type="password" 
+              placeholder="••••••••" 
+              {...registerSignup('confirmPassword')} 
+              error={signupErrors.confirmPassword}
+              className="bg-black/10 text-white border-gold/30 focus:border-gold"
+              labelClassName="text-gold/90"
+            />
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Password</label>
-              <input
-                type="password"
-                value={form.password || ''}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                placeholder="••••••••"
-                style={inputStyle}
-              />
-              <div style={{ fontSize: 11, color: 'rgba(245,200,66,0.6)', marginTop: 6 }}>
-                Min 6 characters
-              </div>
-            </div>
+            <Select 
+              label="Role" 
+              {...registerSignup('role')} 
+              error={signupErrors.role}
+              className="bg-black/10 text-white border-gold/30 focus:border-gold cursor-pointer"
+              labelClassName="text-gold/90"
+            >
+              <option value="shopkeeper" className="text-[#FDF6E3] bg-[#2D4A2D]">Shopkeeper</option>
+              <option value="salesman" className="text-[#FDF6E3] bg-[#2D4A2D]">Salesman</option>
+              <option value="supplier" className="text-[#FDF6E3] bg-[#2D4A2D]">Supplier</option>
+            </Select>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Confirm Password</label>
-              <input
-                type="password"
-                value={form.confirmPassword || ''}
-                onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
-                placeholder="••••••••"
-                style={inputStyle}
-              />
-            </div>
+            {error && <Alert variant="danger" className="text-center">{error}</Alert>}
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={labelStyle}>Role</label>
-              <select
-                value={form.role}
-                onChange={e => setForm({ ...form, role: e.target.value })}
-                style={{
-                  ...inputStyle,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="shopkeeper" style={{ color: '#FDF6E3', background: '#2D4A2D' }}>Shopkeeper</option>
-                <option value="salesman" style={{ color: '#FDF6E3', background: '#2D4A2D' }}>Salesman</option>
-                <option value="supplier" style={{ color: '#FDF6E3', background: '#2D4A2D' }}>Supplier</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleSignup}
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: loading ? 'rgba(150,150,150,0.6)' : '#F5C842',
-                color: '#0D0A05',
-                border: 'none',
-                borderRadius: 10,
-                fontSize: 14,
-                fontWeight: 700,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 14px rgba(245,200,66,0.3)',
-                transition: 'all 0.3s',
-                marginBottom: error ? 12 : 0,
-              }}
+            <Button
+              type="submit"
+              isLoading={loading}
+              className="w-full bg-gold hover:bg-gold-dark text-black font-bold shadow-[0_4px_14px_rgba(245,200,66,0.3)] border-none mt-2"
             >
               {loading ? 'Creating Account...' : 'Create Account'}
-            </button>
-
-            {error && (
-              <div style={{
-                marginTop: 14,
-                padding: 12,
-                borderRadius: 8,
-                background: 'rgba(239, 68, 68, 0.15)',
-                color: '#fca5a5',
-                fontSize: 12,
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                textAlign: 'center',
-              }}>
-                {error}
-              </div>
-            )}
-          </div>
+            </Button>
+          </form>
         )}
 
         {/* Forgot Password Form */}
@@ -340,66 +264,4 @@ export default function Auth({ defaultTab = 'login', onBack }) {
       </div>
     </div>
   );
-
-  async function handleLogin() {
-    const email = String(form.email || '').trim().toLowerCase();
-    const password = String(form.password || '').trim();
-
-    if (!email) return setError('Please enter your email.');
-    if (!validateEmail(email)) return setError('Please enter a valid email.');
-    if (!password) return setError('Please enter your password.');
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const user = await login(email, password);
-      setForm({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
-      navigate('/dashboard');
-    } catch (err) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSignup() {
-    const name = String(form.name || '').trim();
-    const email = String(form.email || '').trim().toLowerCase();
-    const password = String(form.password || '').trim();
-    const confirmPassword = String(form.confirmPassword || '').trim();
-
-    if (!name) return setError('Please enter your full name.');
-    if (!email) return setError('Please enter your email.');
-    if (!validateEmail(email)) return setError('Please enter a valid email.');
-    if (!password) return setError('Please enter a password.');
-
-    if (password.length < 8) {
-      return setError('Password must be at least 8 characters.');
-    }
-
-    if (password !== confirmPassword) return setError('Passwords do not match.');
-
-    if (isSuperAdminEmail(email)) {
-      return setError(`This email is reserved for the super admin. Contact ${SUPER_ADMIN_EMAIL}.`);
-    }
-
-    if (form.role === 'admin') {
-      return setError('Admin accounts cannot be created via signup.');
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      await signup(name, email, password, confirmPassword, form.role);
-      setForm({ email: '', password: '', confirmPassword: '', name: '', role: 'shopkeeper' });
-      setTab('login');
-      setError('');
-    } catch (err) {
-      setError(err.message || 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  }
 }

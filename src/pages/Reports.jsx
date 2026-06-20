@@ -16,7 +16,8 @@ import StatCard from '../components/StatCard';
 import SectionHeader from '../components/SectionHeader';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
-import { THead, TRow, TCell } from '../components/Table';
+import DataGrid from '../components/DataGrid';
+import { Typography, Button, Input } from '../components/ui';
 import { PIE_COLORS } from '../config/charts';
 import { analyticsApi } from '../api/analyticsApi';
 
@@ -35,27 +36,6 @@ function formatPkr(value) {
   if (n >= 1_000) return `PKR ${(n / 1_000).toFixed(1)}K`;
   return `PKR ${n.toLocaleString('en-PK')}`;
 }
-
-const inputStyle = {
-  padding: '8px 12px',
-  border: `1.5px solid ${C.border}`,
-  borderRadius: 8,
-  fontSize: 13,
-  color: C.text,
-  background: C.bg,
-  outline: 'none',
-};
-
-const btnStyle = (primary, disabled) => ({
-  padding: '9px 18px',
-  background: disabled ? C.muted : primary ? C.gold : 'transparent',
-  color: disabled ? '#fff' : primary ? '#fff' : C.gold,
-  border: primary ? 'none' : `1.5px solid ${C.goldBorder}`,
-  borderRadius: 8,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-  fontSize: 13,
-  fontWeight: 700,
-});
 
 export default function Reports({ role }) {
   const defaults = useMemo(() => getDefaultDateRange(), []);
@@ -108,11 +88,17 @@ export default function Reports({ role }) {
     [summary]
   );
 
+  const topProductsColumns = useMemo(() => [
+    { header: 'Rank', accessorKey: 'rank', cell: (p, index) => index + 1 },
+    { header: 'Product', accessorKey: 'name', sortable: true, cell: (p) => <Typography variant="body" weight="semibold">{p.name}</Typography> },
+    { header: 'Quantity sold', accessorKey: 'quantitySold', sortable: true }
+  ], []);
+
   if (!canAccess) {
     return (
       <div className="page-enter">
         <SectionHeader title="Reports & Analytics" />
-        <div style={{ padding: 24, color: C.muted, fontSize: 14 }}>
+        <div className="p-6 text-muted-foreground text-sm">
           Your role does not have access to reports.
         </div>
       </div>
@@ -127,97 +113,76 @@ export default function Reports({ role }) {
     <div className="page-enter">
       <SectionHeader title="Reports & Analytics" />
 
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          alignItems: 'flex-end',
-          marginBottom: 20,
-          padding: 16,
-          background: C.card,
-          border: `1px solid ${C.border}`,
-          borderRadius: 14,
-        }}
-      >
-        <div>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>
-            Start date
-          </label>
-          <input
+      <div className="flex flex-wrap gap-3 items-end mb-5 p-4 bg-card border border-border dark:border-border-dark rounded-xl">
+        <div className="flex-1 min-w-[150px]">
+          <Input
             type="date"
+            label="Start date"
             value={startDate}
             onChange={e => setStartDate(e.target.value)}
-            style={inputStyle}
           />
         </div>
-        <div>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>
-            End date
-          </label>
-          <input
+        <div className="flex-1 min-w-[150px]">
+          <Input
             type="date"
+            label="End date"
             value={endDate}
             onChange={e => setEndDate(e.target.value)}
-            style={inputStyle}
           />
         </div>
-        <button type="button" onClick={loadSummary} disabled={loading} style={btnStyle(true, loading)}>
+        <Button onClick={loadSummary} disabled={loading} isLoading={loading}>
           {loading ? 'Loading…' : 'Apply'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => handleExport('pdf')}
           disabled={!!exporting}
-          style={btnStyle(false, !!exporting)}
+          isLoading={exporting === 'pdf'}
         >
           {exporting === 'pdf' ? 'Exporting PDF…' : 'Export PDF'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => handleExport('excel')}
           disabled={!!exporting}
-          style={btnStyle(false, !!exporting)}
+          isLoading={exporting === 'excel'}
         >
           {exporting === 'excel' ? 'Exporting Excel…' : 'Export Excel'}
-        </button>
+        </Button>
       </div>
 
       <ApiError error={error} />
 
       {summary && (
         <>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: 12,
-              marginBottom: 20,
-            }}
-          >
-            <StatCard icon="💰" label="Revenue" value={formatPkr(summary.totalRevenue)} color={C.gold} />
-            <StatCard icon="🛒" label="Orders" value={String(summary.totalOrders)} color={C.info} />
-            <StatCard icon="✅" label="Collected" value={formatPkr(summary.totalPaid)} color={C.success} />
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 mb-5">
+            <StatCard icon="💰" label={role === 'shopkeeper' ? 'Total Spend' : 'Revenue'} value={formatPkr(summary.totalRevenue)} colorClass="text-gold bg-gold/15" />
+            <StatCard icon="🛒" label="Orders" value={String(summary.totalOrders)} colorClass="text-info bg-info/15" />
+            <StatCard
+              icon="✅"
+              label={role === 'salesman' ? 'Period Collection' : role === 'shopkeeper' ? 'Total Paid' : 'Collected'}
+              value={formatPkr(summary.totalPaid)}
+              colorClass="text-success bg-success/15"
+            />
             <StatCard
               icon="📋"
-              label="Outstanding"
+              label={role === 'salesman' ? 'Amount Due in Market' : role === 'shopkeeper' ? 'Amount Due' : 'Outstanding'}
               value={formatPkr(summary.outstandingBalance)}
-              color={C.warn}
+              colorClass="text-warn bg-warn/15"
             />
+            {role === 'admin' && (
+              <>
+                <StatCard icon="💸" label="Spendings" value={formatPkr(summary.totalExpenses || 0)} colorClass="text-danger bg-danger/15" />
+                <StatCard icon="📈" label="Net Profit" value={formatPkr(summary.netProfit || 0)} colorClass="text-success bg-success/15" />
+              </>
+            )}
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 14,
-              marginBottom: 20,
-            }}
-          >
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>
-                Revenue by week
-              </div>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5 mb-5 max-md:grid-cols-1">
+            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+              <Typography variant="body" weight="semibold" className="text-foreground mb-3.5 block">
+                {role === 'shopkeeper' ? 'Spend by week' : 'Revenue by week'}
+              </Typography>
               {summary.revenueByWeek?.length > 0 ? (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={summary.revenueByWeek}>
@@ -229,16 +194,16 @@ export default function Reports({ role }) {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div style={{ fontSize: 13, color: C.muted, padding: 40, textAlign: 'center' }}>
+                <div className="text-[13px] text-muted-foreground p-10 text-center">
                   No revenue data for this period.
                 </div>
               )}
             </div>
 
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>
+            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+              <Typography variant="body" weight="semibold" className="text-foreground mb-3.5 block">
                 Orders by status
-              </div>
+              </Typography>
               {statusChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
@@ -261,32 +226,26 @@ export default function Reports({ role }) {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div style={{ fontSize: 13, color: C.muted, padding: 40, textAlign: 'center' }}>
+                <div className="text-[13px] text-muted-foreground p-10 text-center">
                   No orders in this period.
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 18px', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Top products (quantity sold)</div>
+          <div className="bg-card border border-border dark:border-border-dark rounded-xl overflow-hidden">
+            <div className="py-4 px-4.5 border-b border-border dark:border-border-dark">
+              <Typography variant="body" weight="semibold" className="text-foreground block">Top products (quantity sold)</Typography>
             </div>
             {summary.topProducts?.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <THead cols={['Rank', 'Product', 'Quantity sold']} />
-                <tbody>
-                  {summary.topProducts.map((p, i) => (
-                    <TRow key={p.productId || p.name || i}>
-                      <TCell>{i + 1}</TCell>
-                      <TCell bold>{p.name}</TCell>
-                      <TCell>{p.quantitySold}</TCell>
-                    </TRow>
-                  ))}
-                </tbody>
-              </table>
+              <DataGrid 
+                columns={topProductsColumns}
+                data={summary.topProducts}
+                emptyMessage="No line-item sales in this period. New orders include product breakdowns for ranking."
+                selectable={false}
+              />
             ) : (
-              <div style={{ padding: 24, fontSize: 13, color: C.muted, textAlign: 'center' }}>
+              <div className="p-6 text-[13px] text-muted-foreground text-center">
                 No line-item sales in this period. New orders include product breakdowns for ranking.
               </div>
             )}

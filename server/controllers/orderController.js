@@ -5,8 +5,9 @@ import Product from '../models/Product.js';
 import Transaction from '../models/Transaction.js';
 import Payment from '../models/Payment.js';
 import StockMovement from '../models/StockMovement.js';
+import Dispatch from '../models/Dispatch.js';
 import { formatOrder } from '../utils/format.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import { cache } from '../utils/cache.js';
 import { runInTransaction } from '../utils/transaction.js';
 import catchAsync from '../utils/catchAsync.js';
@@ -16,51 +17,134 @@ import StockService from '../services/StockService.js';
 import ApprovalService from '../services/ApprovalService.js';
 import NotificationService from '../services/NotificationService.js';
 
-export const getOrders = catchAsync(async (req, res) => {
-  const page = req.query.page ? parseInt(req.query.page, 10) : null;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+const ALLOWED_TRANSITIONS = {
+  pending: {
+    supplier: ['confirmed', 'cancelled'],
+    admin: ['confirmed', 'cancelled', 'ready_for_dispatch'],
+  },
+  pending_approval: {
+    admin: ['confirmed', 'cancelled'],
+  },
+  paid: {
+    supplier: ['ready_for_dispatch', 'cancelled'],
+    admin: ['ready_for_dispatch', 'cancelled'],
+  },
+  confirmed: {
+    supplier: ['ready_for_dispatch'],
+    admin: ['ready_for_dispatch', 'cancelled'],
+  },
+  ready_for_dispatch: {
+    admin: ['cancelled'],
+    supplier: [],
+  },
+  in_transit: {
+    admin: [],
+  },
+  partially_delivered: {
+    admin: ['return_requested'],
+  },
+  delivered: {
+    admin: ['return_requested'],
+  },
+  cancelled: {},
+  return_requested: {
+    admin: ['returned', 'confirmed'],
+  },
+  returned: {},
+};
 
-  const cacheKey = `orders:list:role:${req.user.role}:user:${req.user.id}:page:${page || 'all'}:limit:${limit || 'all'}`;
+
+
+const buildOrderScope = async (user) => {
+  const filter = { isDeleted: { $ne: true } };
+  if (user.role === 'shopkeeper') {
+    const userDoc = await User.findById(user.id);
+    const ownerName = userDoc ? userDoc.name : '';
+    const shops = await Shopkeeper.find({ owner: ownerName }).select('_id');
+    filter.shop = { $in: shops.map(s => s._id) };
+  } else if (user.role === 'salesman') {
+    filter.man = user.id;
+  } else if (user.role === 'supplier') {
+    // Orders contain line items which contain products. We need to find orders that have products belonging to this supplier.
+    const products = await Product.find({ supplier: user.id }).select('_id');
+    filter['lineItems.productId'] = { $in: products.map(p => p._id) };
+  }
+  return filter;
+};
+
+export const getOrders = catchAsync(async (req, res) => {
+  const { page, limit, skip } = getPagination(req.query);
+  const statusFilter = req.query.status || null;
+  const statusParam = req.query.status || 'all';
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'status', 'total', 'date'], { createdAt: -1 });
+
+  const cacheKey = `orders:list:role:${req.user.role}:user:${req.user.id}:page:${page}:limit:${limit}:status:${statusParam}:sort:${JSON.stringify(sort)}`;
   const cachedData = await cache.get(cacheKey);
   if (cachedData) {
     return res.json(cachedData);
   }
 
-  const filter = { isDeleted: { $ne: true } };
-  if (req.user.role === 'shopkeeper') {
-    const userDoc = await User.findById(req.user.id);
-    const ownerName = userDoc ? userDoc.name : '';
-    const shops = await Shopkeeper.find({ owner: ownerName }).select('_id');
-    filter.shop = { $in: shops.map(s => s._id) };
-  } else if (req.user.role === 'salesman') {
-    filter.man = req.user.id;
+  const filter = await buildOrderScope(req.user);
+  if (req.query.status && req.query.status !== 'all') {
+    filter.status = req.query.status;
+  }
+  if (statusFilter) {
+    filter.status = statusFilter;
   }
 
-  let responseData;
+  // Phase 6: Exclude orders that are already assigned to an active dispatch route
+  if (filter.status === 'ready_for_dispatch') {
+    const activeDispatches = await Dispatch.find({ status: { $in: ['scheduled', 'in-transit'] } }).select('orders');
+    const activeOrderIds = activeDispatches.flatMap(d => d.orders);
+    if (activeOrderIds.length > 0) {
+      filter._id = { $nin: activeOrderIds };
+    }
+  }
+
   const populateOpts = ['shop', 'man'];
 
-  if (page || limit) {
-    const paginatedResult = await paginate(Order, filter, {
+  const [docs, total] = await Promise.all([
+    Order.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .select('-lineItems') // Exclude heavy lineItems array in list view
+      .populate(populateOpts)
+      .lean(),
+    Order.countDocuments(filter)
+  ]);
+
+  const responseData = {
+    data: docs.map(formatOrder),
+    pagination: {
       page,
       limit,
-      sort: { createdAt: -1 },
-      populate: populateOpts,
-    });
-    responseData = {
-      data: paginatedResult.data.map(formatOrder),
-      pagination: paginatedResult.pagination,
-    };
-  } else {
-    const docs = await Order.find(filter)
-      .sort({ createdAt: -1 })
-      .populate('shop')
-      .populate('man')
-      .lean();
-    responseData = docs.map(formatOrder);
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  };
+
+  await cache.set(cacheKey, responseData, 10);
+  res.json(responseData);
+});
+
+export const getOrder = catchAsync(async (req, res) => {
+  const id = req.params.id;
+  const scope = await buildOrderScope(req.user);
+  const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { orderId: id };
+  
+  const order = await Order.findOne({ ...query, ...scope })
+    .populate('shop')
+    .populate('man')
+    .lean();
+    
+  if (!order) {
+    throw AppError.notFound('Order not found or you do not have permission to view it');
   }
 
-  await cache.set(cacheKey, responseData, 60);
-  res.json(responseData);
+  res.json(formatOrder(order));
 });
 
 export const createOrder = catchAsync(async (req, res) => {
@@ -69,13 +153,13 @@ export const createOrder = catchAsync(async (req, res) => {
 
   let shopId = req.validatedBody.shopkeeperId || req.validatedBody.shop;
   if (typeof shopId === 'string' && !shopId.match(/^[0-9a-fA-F]{24}$/)) {
-    let sk = await Shopkeeper.findOne({ name: shopId });
+    let sk = await Shopkeeper.findOne({ $or: [{ name: shopId }, { owner: shopId }] });
     if (!sk) {
       const userSk = await User.findOne({ name: shopId, role: 'shopkeeper' });
       if (userSk) {
         sk = await Shopkeeper.create({
-          name: shopId,
-          owner: shopId,
+          name: userSk.name + ' Store',
+          owner: userSk.name,
           location: userSk.address || '',
           contact: userSk.phone || '',
           status: 'active'
@@ -117,8 +201,12 @@ export const createOrder = catchAsync(async (req, res) => {
     let calculatedTotal = 0;
     for (const item of items) {
       if (Number(item.quantity) <= 0) throw AppError.validation('Item quantity must be strictly greater than 0');
-      const product = await Product.findById(item.productId).session(session);
-      if (!product) throw AppError.notFound(`Product not found: ${item.productId}`);
+      
+      const productQuery = { _id: item.productId };
+      if (req.user.role === 'supplier') productQuery.supplier = req.user.id;
+      
+      const product = await Product.findOne(productQuery).session(session);
+      if (!product) throw AppError.notFound(`Product not found or access denied: ${item.productId}`);
       
       const costPrice = product.costPrice || 0;
       const totalItemCost = costPrice * Number(item.quantity);
@@ -173,6 +261,8 @@ export const createOrder = catchAsync(async (req, res) => {
       status: finalStatus,
       date: date || new Date().toISOString().slice(0, 10),
       pay: pay || 'installment',
+      paymentStatus: 'pending',
+      paidAmount: 0,
     }], { session });
 
     const orderDocCreated = created[0];
@@ -193,15 +283,15 @@ export const createOrder = catchAsync(async (req, res) => {
         });
     } else {
         // Only deduct stock if the order is not pending approval
-        for (const item of lineItems) {
-            await StockService.moveStock({
-                productId: item.productId,
-                quantityChanged: -Number(item.quantity),
-                movementType: 'sale',
-                referenceDocument: orderDocCreated._id,
-                user: req.user.id,
-                session
-            });
+        const stockMovements = lineItems.map(item => ({
+            productId: item.productId,
+            quantityChanged: -Number(item.quantity),
+            movementType: 'sale',
+            referenceDocument: orderDocCreated._id,
+            user: req.user.id
+        }));
+        if (stockMovements.length > 0) {
+            await StockService.bulkMoveStock(stockMovements, session);
         }
     }
 
@@ -228,7 +318,7 @@ export const createOrder = catchAsync(async (req, res) => {
       due: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), // 30 days due
     }], { session });
 
-    // Phase 6: Notify Suppliers of the new order
+    // Phase 6: Notify Suppliers and Shopkeepers of the new order
     await NotificationService.send({
       title: 'New Order Received',
       message: `New order ${orderDocCreated.orderId} received from ${skDoc ? skDoc.name : 'Unknown Shop'}`,
@@ -237,7 +327,7 @@ export const createOrder = catchAsync(async (req, res) => {
       module: 'OrderManagement',
       documentId: orderDocCreated._id,
       sender: req.user.id
-    }, null, 'supplier', session);
+    }, null, 'all', session);
 
     return orderDocCreated;
   });
@@ -259,16 +349,18 @@ export const createOrder = catchAsync(async (req, res) => {
   await cache.del('orders:list:*');
   await cache.del('products:list:*');
 
-  const populatedDoc = await Order.findById(doc._id).populate('shop').populate('man');
+  const scope = await buildOrderScope(req.user);
+  const populatedDoc = await Order.findOne({ _id: doc._id, ...scope }).populate('shop').populate('man');
   res.status(201).json(formatOrder(populatedDoc));
 });
 
 export const updateOrder = catchAsync(async (req, res) => {
   const updates = { ...req.validatedBody };
+  const scope = await buildOrderScope(req.user);
 
   if (updates.shop) {
     if (typeof updates.shop === 'string' && !updates.shop.match(/^[0-9a-fA-F]{24}$/)) {
-      const sk = await Shopkeeper.findOne({ name: updates.shop });
+      const sk = await Shopkeeper.findOne({ $or: [{ name: updates.shop }, { owner: updates.shop }] });
       if (sk) updates.shop = sk._id;
     }
   } else if (updates.shopkeeperId) {
@@ -281,30 +373,28 @@ export const updateOrder = catchAsync(async (req, res) => {
     if (u) updates.man = u._id;
   }
 
+  const query = req.params.orderId.match(/^[0-9a-fA-F]{24}$/) ? { _id: req.params.orderId } : { orderId: req.params.orderId };
   let doc;
-  if (updates.items !== undefined) {
-    const order = await Order.findOne({ orderId: req.params.orderId });
-    if (!order) throw AppError.notFound('Order not found');
-    
-    if (req.user.role === 'salesman' && order.man?.toString() !== req.user.id) {
-      throw AppError.forbidden('You can only modify your own orders');
-    }
 
+  if (updates.items !== undefined) {
+    const order = await Order.findOne({ ...query, ...scope });
+    if (!order) throw AppError.notFound('Order not found or access denied');
+    
     if (order.status !== 'pending') {
       throw AppError.validation('Cannot modify items of a non-pending order');
     }
 
     doc = await runInTransaction(async (session) => {
-      // 1. Revert old stock adjustments via Ledger
-      for (const item of order.lineItems) {
-        await StockService.moveStock({
-          productId: item.productId,
-          quantityChanged: item.quantity,
-          movementType: 'return',
-          referenceDocument: order._id,
-          user: req.user.id,
-          session
-        });
+      // 1. Revert old stock adjustments via Ledger (Bulk)
+      const revertMovements = order.lineItems.map(item => ({
+        productId: item.productId,
+        quantityChanged: item.quantity,
+        movementType: 'return',
+        referenceDocument: order._id,
+        user: req.user.id
+      }));
+      if (revertMovements.length > 0) {
+        await StockService.bulkMoveStock(revertMovements, session);
       }
 
       // 2. Apply new stock adjustments via Ledger, calculate quantity and total
@@ -312,15 +402,24 @@ export const updateOrder = catchAsync(async (req, res) => {
       let calculatedTotal = 0;
       const totalQuantity = updates.items.reduce((acc, item) => acc + item.quantity, 0);
 
+      // We still need costPrice to calculate total, but wait! We can fetch products in bulk and compute total.
+      const productIds = updates.items.map(i => i.productId);
+      const products = await Product.find({ _id: { $in: productIds } }).session(session).lean();
+      const productMap = new Map(products.map(p => [p._id.toString(), p]));
+
+      const newMovements = [];
+
       for (const item of updates.items) {
         if (Number(item.quantity) <= 0) throw AppError.validation('Item quantity must be strictly greater than 0');
-        const product = await StockService.moveStock({
+        const product = productMap.get(item.productId.toString());
+        if (!product) throw AppError.notFound(`Product not found: ${item.productId}`);
+
+        newMovements.push({
           productId: item.productId,
           quantityChanged: -Number(item.quantity),
           movementType: 'sale',
           referenceDocument: order._id,
-          user: req.user.id,
-          session
+          user: req.user.id
         });
 
         const costPrice = product.costPrice || 0;
@@ -333,6 +432,10 @@ export const updateOrder = catchAsync(async (req, res) => {
           totalCost: totalItemCost
         });
         calculatedTotal += product.price * Number(item.quantity);
+      }
+
+      if (newMovements.length > 0) {
+        await StockService.bulkMoveStock(newMovements, session);
       }
       
       const totalCogs = lineItems.reduce((acc, i) => acc + i.totalCost, 0);
@@ -348,10 +451,17 @@ export const updateOrder = catchAsync(async (req, res) => {
       updates.totalCogs = totalCogs;
 
       const updated = await Order.findOneAndUpdate(
-        { orderId: req.params.orderId },
-        updates,
+        { _id: order._id, status: 'pending', __v: order.__v },
+        { 
+          $set: updates,
+          $inc: { __v: 1 }
+        },
         { session, new: true }
       ).populate('shop').populate('man');
+
+      if (!updated) {
+        throw AppError.conflict('Order was updated concurrently or is no longer pending');
+      }
 
       await AuditService.log({
         user: req.user.id,
@@ -365,21 +475,22 @@ export const updateOrder = catchAsync(async (req, res) => {
       return updated;
     });
   } else {
-    const orderToUpdate = await Order.findOne({ orderId: req.params.orderId });
-    if (!orderToUpdate) throw AppError.notFound('Order not found');
-
-    if (req.user.role === 'salesman' && orderToUpdate.man?.toString() !== req.user.id) {
-      throw AppError.forbidden('You can only modify your own orders');
-    }
+    const orderToUpdate = await Order.findOne({ ...query, ...scope });
+    if (!orderToUpdate) throw AppError.notFound('Order not found or access denied');
 
     doc = await Order.findOneAndUpdate(
-      { orderId: req.params.orderId },
-      updates,
+      { _id: orderToUpdate._id, __v: orderToUpdate.__v },
+      { 
+        $set: updates,
+        $inc: { __v: 1 }
+      },
       { new: true }
     ).populate('shop').populate('man');
+    
+    if (!doc) {
+      throw AppError.conflict('Order was updated concurrently');
+    }
   }
-
-  if (!doc) throw AppError.notFound('Order not found');
 
   await cache.del('orders:list:*');
   await cache.del('products:list:*');
@@ -390,15 +501,16 @@ export const updateOrder = catchAsync(async (req, res) => {
 export const updateOrderStatus = catchAsync(async (req, res) => {
   const { id } = req.params;
   const { status } = req.validatedBody;
+  const scope = await buildOrderScope(req.user);
 
   if (!status) {
     throw AppError.validation('Status is required');
   }
 
   const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { orderId: id };
-  const order = await Order.findOne(query);
+  const order = await Order.findOne({ ...query, ...scope });
   if (!order) {
-    throw AppError.notFound('Order not found');
+    throw AppError.notFound('Order not found or access denied');
   }
 
   if (order.isDeleted) {
@@ -411,21 +523,23 @@ export const updateOrderStatus = catchAsync(async (req, res) => {
     return res.json(formatOrder(order));
   }
 
-  if (currentStatus === 'delivered' || currentStatus === 'cancelled') {
-    throw AppError.validation(`Cannot change status of a ${currentStatus} order`);
+  const roleAllowed = ALLOWED_TRANSITIONS[currentStatus]?.[req.user.role];
+  if (!roleAllowed || !roleAllowed.includes(status)) {
+    throw AppError.forbidden(`Role '${req.user.role}' cannot transition order from '${currentStatus}' to '${status}'`);
   }
 
-  // Removed rigid allowedTransitions logic because Zod schema validates the status, 
-  // and the dispatch flow handles its own transitions flexibly.
-
   await runInTransaction(async (session) => {
+    // OCC and conditional update to prevent race conditions in state transition
     const updatedOrder = await Order.findOneAndUpdate(
-       { _id: order._id, status: currentStatus },
-       { status },
+       { _id: order._id, status: currentStatus, __v: order.__v },
+       { 
+         $set: { status },
+         $inc: { __v: 1 }
+       },
        { new: true, session }
     );
     if (!updatedOrder) {
-       throw AppError.validation('Order status was modified concurrently. Please refresh.');
+       throw AppError.conflict('Order status was modified concurrently. Please refresh.');
     }
 
     if (status === 'cancelled') {
@@ -436,15 +550,15 @@ export const updateOrderStatus = catchAsync(async (req, res) => {
       }).session(session);
 
       if (stockMovements.length > 0) {
-        for (const item of order.lineItems) {
-          await StockService.moveStock({
+        const cancellationMovements = order.lineItems.map(item => ({
             productId: item.productId,
             quantityChanged: item.quantity,
             movementType: 'ORDER_CANCELLATION_RETURN',
             referenceDocument: order._id,
-            user: req.user.id,
-            session
-          });
+            user: req.user.id
+        }));
+        if (cancellationMovements.length > 0) {
+            await StockService.bulkMoveStock(cancellationMovements, session);
         }
       }
     }
@@ -477,8 +591,22 @@ export const updateOrderStatus = catchAsync(async (req, res) => {
     }
   });
 
+  try {
+    const { getIO } = await import('../utils/socket.js');
+    const io = getIO();
+    io.emit('ORDER_STATUS_CHANGED', {
+      orderId: order.orderId || order._id,
+      previousStatus: currentStatus,
+      newStatus: status,
+      updatedBy: req.user.id
+    });
+  } catch (err) {
+    console.error('Socket emit failed in updateOrderStatus:', err.message);
+  }
+
   await cache.del('orders:list:*');
 
-  const populatedOrder = await Order.findById(order._id).populate('shop').populate('man');
+  const scopeFilter = await buildOrderScope(req.user);
+  const populatedOrder = await Order.findOne({ _id: order._id, ...scopeFilter }).populate('shop').populate('man');
   res.json(formatOrder(populatedOrder));
 });

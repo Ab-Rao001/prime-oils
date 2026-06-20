@@ -3,21 +3,20 @@ import C from '../theme';
 
 export default function SearchBar({ value, onChange, placeholder }) {
   return (
-    <div style={{ position: 'relative', width: 260, marginBottom: 14 }}>
-      <span style={{
-        position: 'absolute', left: 10, top: '50%',
-        transform: 'translateY(-50%)', color: C.muted, fontSize: 14,
-      }}>🔍</span>
+    <div className="relative w-full max-w-[260px] mb-3.5">
+      <span 
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm flex items-center justify-center pointer-events-none"
+        aria-hidden="true"
+      >
+        🔍
+      </span>
       <input
+        type="search"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder || 'Search...'}
-        style={{
-          width: '100%', paddingLeft: 32, height: 34,
-          border: `1px solid ${C.border}`, borderRadius: 8,
-          fontSize: 13, color: C.text, background: C.card,
-          outline: 'none', boxSizing: 'border-box',
-        }}
+        aria-label={placeholder || 'Search'}
+        className="w-full pl-9 pr-3 py-2 min-h-[44px] bg-card border border-border dark:border-border-dark rounded-lg text-[13px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold transition-colors"
       />
     </div>
   );

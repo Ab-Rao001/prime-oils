@@ -6,6 +6,8 @@ import { generateAccessToken, generateTokenPair, verifyToken } from '../utils/jw
 import crypto from 'crypto';
 import { auth, isFirebaseInitialized } from '../config/firebase.js';
 import AuditService from '../services/AuditService.js';
+import Session from '../models/Session.js';
+import logger from '../utils/logger.js';
 
 export const login = catchAsync(async (req, res) => {
   const { email, password } = req.validatedBody;
@@ -16,13 +18,52 @@ export const login = catchAsync(async (req, res) => {
       throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
-    if (user.isAccountLocked()) {
-      throw new AppError('Account is locked. Try again after 15 minutes', 403, 'ACCOUNT_LOCKED');
+    if (user.isAccountLocked && user.isAccountLocked()) {
+      await AuditService.log({
+        user: user._id,
+        action: 'ACCOUNT_LOCKED_ATTEMPT',
+        collectionName: 'User',
+        documentId: user._id,
+        ipAddress: req.ip
+      });
+      throw AppError.forbidden('Account is temporarily locked. Try again later.');
+    }
+
+    // Correlated Firebase verification
+    if (isFirebaseInitialized && process.env.FIREBASE_WEB_API_KEY) {
+      try {
+        const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_WEB_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, returnSecureToken: true })
+        });
+        const fbData = await fbRes.json();
+        if (!fbRes.ok || fbData.error) {
+          // If the user doesn't exist in Firebase but exists in MongoDB, we migrate them.
+          if (fbData.error && fbData.error.message === 'EMAIL_NOT_FOUND') {
+            // Wait for MongoDB password verification below. If it succeeds, we'll create the Firebase account.
+            req.needsFirebaseMigration = true;
+          } else {
+            await AuditService.log({
+              user: user._id,
+              action: 'FAILED_LOGIN_FIREBASE',
+              collectionName: 'User',
+              documentId: user._id,
+              ipAddress: req.ip
+            });
+            throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
+          }
+        }
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        console.error('Firebase Auth REST Error:', err);
+      }
     }
 
     const passwordMatch = await user.comparePassword(password);
     if (!passwordMatch) {
-      await user.recordFailedLogin();
+      if (user.recordFailedLogin) await user.recordFailedLogin();
+      
       await AuditService.log({
         user: user._id,
         action: 'FAILED_LOGIN',
@@ -30,6 +71,21 @@ export const login = catchAsync(async (req, res) => {
         documentId: user._id,
         ipAddress: req.ip
       });
+      
+      // If just locked, log ACCOUNT_LOCKED
+      if (user.isAccountLocked && user.isAccountLocked()) {
+        logger.error(`[SECURITY CRITICAL] EXCESSIVE FAILED AUTHENTICATION: User ${email} account locked`);
+        await AuditService.log({
+          user: user._id,
+          action: 'ACCOUNT_LOCKED',
+          collectionName: 'User',
+          documentId: user._id,
+          ipAddress: req.ip
+        });
+      } else {
+        logger.warn(`[SECURITY WARN] FAILED AUTHENTICATION for user ${email}`);
+      }
+      
       throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
@@ -45,9 +101,35 @@ export const login = catchAsync(async (req, res) => {
     };
 
     const { accessToken, refreshToken } = generateTokenPair(payload);
-    user.loginHistory.push({ time: new Date(), ip: req.ip, status: 'success' });
-    if (user.loginHistory.length > 20) user.loginHistory.shift();
-    await user.recordSuccessfulLogin();
+    if (user.recordSuccessfulLogin) await user.recordSuccessfulLogin();
+    
+    // Auto-migrate legacy user to Firebase if needed
+    if (req.needsFirebaseMigration && isFirebaseInitialized && auth) {
+      try {
+        const firebaseUser = await auth.createUser({
+          email: user.email,
+          password: password,
+          displayName: user.name,
+        });
+        user.firebaseUid = firebaseUser.uid;
+        await user.save();
+        logger.info(`Legacy user ${user.email} successfully migrated to Firebase.`);
+      } catch (firebaseErr) {
+        logger.warn(`Failed to migrate legacy user ${user.email} to Firebase: ` + firebaseErr.message);
+      }
+    }
+    
+    // Create new session
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const userAgent = req.headers['user-agent'] || 'Unknown Device';
+    
+    await Session.create({
+      user: user._id,
+      refreshTokenHash,
+      deviceInfo: userAgent,
+      ipAddress: req.ip,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    });
     
     await AuditService.log({
       user: user._id,
@@ -59,8 +141,8 @@ export const login = catchAsync(async (req, res) => {
 
     const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = { httpOnly: true, secure: isProduction, sameSite: 'strict' };
-    res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 24 * 60 * 60 * 1000 });
-    res.cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
 
     return res.json({
       success: true,
@@ -78,70 +160,140 @@ export const login = catchAsync(async (req, res) => {
 });
 
 export const refresh = catchAsync(async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.validatedBody.refreshToken;
+  const refreshToken = req.cookies?.refreshToken || req.validatedBody?.refreshToken;
   if (!refreshToken) {
     throw new AppError('Refresh token is required', 401, 'TOKEN_REQUIRED');
   }
 
-  try {
-    const decoded = verifyToken(refreshToken);
-    const user = await User.findById(decoded.id);
-    if (!user || !user.active || user.status !== 'active') {
-      throw new AppError('Invalid user or suspended', 401, 'USER_SUSPENDED');
-    }
+  const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  const session = await Session.findOne({ refreshTokenHash }).populate('user');
 
-    const payload = {
-      id: user._id.toString(),
-      role: user.role,
-      email: user.email,
-      tokenVersion: user.tokenVersion || 0
-    };
-
-    const accessToken = generateAccessToken(payload);
-
-    const isProduction = process.env.NODE_ENV === 'production';
-    res.cookie('accessToken', accessToken, { 
-      httpOnly: true, 
-      secure: isProduction, 
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000 
-    });
-
-    res.json({
-      success: true
-    });
-  } catch (err) {
-    if (err instanceof AppError && err.code === 'USER_SUSPENDED') throw err;
-    throw new AppError('Invalid or expired refresh token', 401, 'INVALID_REFRESH_TOKEN');
+  if (!session) {
+    // Possible replay/theft attack using an old token not in DB, but we don't know the user.
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    throw new AppError('Invalid refresh token', 401, 'INVALID_REFRESH_TOKEN');
   }
+
+  const user = session.user;
+  
+  if (session.isRevoked) {
+    // REUSE OF REVOKED TOKEN DETECTED: Revoke all sessions for this user!
+    await Session.updateMany({ user: user._id }, { isRevoked: true });
+    
+    await AuditService.log({
+      user: user._id,
+      action: 'TOKEN_THEFT_DETECTED',
+      collectionName: 'Session',
+      documentId: session._id,
+      ipAddress: req.ip
+    });
+    
+    logger.error(`[SECURITY CRITICAL] REFRESH TOKEN THEFT DETECTED for user ${user._id}`);
+    
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    throw new AppError('Security violation detected. Please login again.', 401, 'TOKEN_REVOKED_REUSE');
+  }
+
+  if (session.expiresAt < new Date()) {
+    throw new AppError('Refresh token expired', 401, 'TOKEN_EXPIRED');
+  }
+
+  if (!user || !user.active || user.status !== 'active') {
+    throw new AppError('Invalid user or suspended', 401, 'USER_SUSPENDED');
+  }
+
+  // Revoke old session to enforce token rotation
+  session.isRevoked = true;
+  await session.save();
+
+  // Issue new tokens
+  const payload = {
+    id: user._id.toString(),
+    role: user.role,
+    email: user.email,
+    tokenVersion: user.tokenVersion || 0
+  };
+
+  const { accessToken, refreshToken: newRefreshToken } = generateTokenPair(payload);
+  const newRefreshTokenHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
+  
+  await Session.create({
+    user: user._id,
+    refreshTokenHash: newRefreshTokenHash,
+    deviceInfo: req.headers['user-agent'] || 'Unknown Device',
+    ipAddress: req.ip,
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  });
+  
+  await AuditService.log({
+    user: user._id,
+    action: 'TOKEN_REFRESH',
+    collectionName: 'Session',
+    ipAddress: req.ip
+  });
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('accessToken', accessToken, { 
+    httpOnly: true, 
+    secure: isProduction, 
+    sameSite: 'strict',
+    maxAge: 15 * 60 * 1000 
+  });
+  res.cookie('refreshToken', newRefreshToken, {
+    httpOnly: true, 
+    secure: isProduction, 
+    sameSite: 'strict',
+    maxAge: 30 * 24 * 60 * 60 * 1000 
+  });
+
+  res.json({ success: true });
 });
 
 export const signup = catchAsync(async (req, res) => {
-  const { name, email, password, confirmPassword, phone, role } = req.validatedBody;
+  const { name, email, password, confirmPassword, phone } = req.validatedBody;
 
   const existingUser = await User.findOne({ email: email.toLowerCase() });
   if (existingUser) {
     throw new AppError('Email is already registered', 409, 'EMAIL_EXISTS');
   }
 
+  // FORCE SAFE ROLE (Ghost Mode Patch)
+  const safeRole = 'shopkeeper';
+
   const newUser = await User.create({
     name,
     email: email.toLowerCase(),
     password,
     phone: phone || null,
-    role: role || 'shopkeeper',
+    role: safeRole,
     status: 'active',
     active: true,
   });
 
   if (newUser.role === 'shopkeeper') {
-    await Shopkeeper.create({
-      name: newUser.name + " Store",
-      owner: newUser.name,
-      phone: newUser.phone,
-      loc: "Pending",
-      status: 'active'
+    // Try to find an existing unlinked shopkeeper created by Admin
+    let existingShop = await Shopkeeper.findOne({ 
+      $or: [{ phone: newUser.phone }, { owner: newUser.name }],
+      userId: { $exists: false }
     });
+
+    if (existingShop) {
+      existingShop.userId = newUser._id;
+      existingShop.email = newUser.email;
+      await existingShop.save();
+    } else {
+      await Shopkeeper.create({
+        name: newUser.name + " Store",
+        owner: newUser.name,
+        email: newUser.email,
+        userId: newUser._id,
+        phone: newUser.phone,
+        loc: "Pending",
+        status: 'active'
+      });
+    }
   }
 
   const payload = {
@@ -175,11 +327,21 @@ export const signup = catchAsync(async (req, res) => {
   });
 
   const { accessToken, refreshToken } = generateTokenPair(payload);
+  const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  const userAgent = req.headers['user-agent'] || 'Unknown Device';
+  
+  await Session.create({
+    user: newUser._id,
+    refreshTokenHash,
+    deviceInfo: userAgent,
+    ipAddress: req.ip,
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  });
 
   const isProduction = process.env.NODE_ENV === 'production';
   const cookieOptions = { httpOnly: true, secure: isProduction, sameSite: 'strict' };
-  res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 24 * 60 * 60 * 1000 });
-  res.cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+  res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+  res.cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
 
   res.status(201).json({
     success: true,
@@ -195,6 +357,21 @@ export const signup = catchAsync(async (req, res) => {
 });
 
 export const logout = catchAsync(async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken;
+  if (refreshToken) {
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    await Session.findOneAndUpdate({ refreshTokenHash }, { isRevoked: true });
+  }
+
+  try {
+    const { getIO } = await import('../utils/socket.js');
+    const io = getIO();
+    // Assuming user's sockets join a room with their user ID
+    io.to(req.user.id.toString()).disconnectSockets(true);
+  } catch (e) {
+    // Ignore if socket io is not fully initialized
+  }
+
   await AuditService.log({
     user: req.user.id,
     action: 'LOGOUT',
@@ -216,29 +393,30 @@ export const logout = catchAsync(async (req, res) => {
 });
 
 export const logoutAll = catchAsync(async (req, res) => {
-  const user = await User.findById(req.user.id);
-  if (user) {
-    user.tokenVersion = (user.tokenVersion || 0) + 1;
-    await user.save();
+  const currentRefreshToken = req.cookies?.refreshToken;
+  let currentHash = null;
+  if (currentRefreshToken) {
+    currentHash = crypto.createHash('sha256').update(currentRefreshToken).digest('hex');
   }
-  
+
+  const query = { user: req.user.id };
+  if (currentHash) {
+    query.refreshTokenHash = { $ne: currentHash };
+  }
+
+  await Session.updateMany(query, { isRevoked: true });
+
   await AuditService.log({
     user: req.user.id,
-    action: 'LOGOUT_ALL',
+    action: 'LOGOUT_OTHER_DEVICES',
     collectionName: 'User',
     documentId: req.user.id,
     ipAddress: req.ip
   });
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  const cookieOptions = { httpOnly: true, secure: isProduction, sameSite: 'strict' };
-  
-  res.clearCookie('accessToken', cookieOptions);
-  res.clearCookie('refreshToken', cookieOptions);
-
   res.json({
     success: true,
-    message: 'Logged out of all sessions successfully'
+    message: 'Logged out of all other sessions successfully'
   });
 });
 
@@ -253,8 +431,10 @@ export const getMe = catchAsync(async (req, res) => {
 
 export const forgotPassword = catchAsync(async (req, res) => {
   const user = await User.findOne({ email: req.validatedBody.email.toLowerCase() });
+  
+  // Rule 7: Never reveal if email exists. Always return positive response.
   if (!user) {
-    return res.status(404).json({ success: false, message: 'There is no user with that email address.' });
+    return res.json({ success: true, message: 'If the account exists, a reset email has been sent.' });
   }
 
   const resetToken = user.createPasswordResetToken();
@@ -268,7 +448,8 @@ export const forgotPassword = catchAsync(async (req, res) => {
     ipAddress: req.ip
   });
 
-  res.json({ success: true, message: 'Password reset token generated.', token: resetToken });
+  // Mock sending email
+  res.json({ success: true, message: 'If the account exists, a reset email has been sent.', token: resetToken });
 });
 
 export const resetPassword = catchAsync(async (req, res) => {
@@ -288,6 +469,9 @@ export const resetPassword = catchAsync(async (req, res) => {
   user.tokenVersion = (user.tokenVersion || 0) + 1; 
   await user.save();
   
+  // Revoke all sessions
+  await Session.updateMany({ user: user._id }, { isRevoked: true });
+  
   await AuditService.log({
     user: user._id,
     action: 'PASSWORD_RESET',
@@ -296,7 +480,7 @@ export const resetPassword = catchAsync(async (req, res) => {
     ipAddress: req.ip
   });
 
-  res.json({ success: true, message: 'Password reset successfully' });
+  res.json({ success: true, message: 'Password reset successfully. Please login again.' });
 });
 
 export const changePassword = catchAsync(async (req, res) => {
@@ -312,6 +496,16 @@ export const changePassword = catchAsync(async (req, res) => {
   user.password = newPassword;
   user.tokenVersion = (user.tokenVersion || 0) + 1; 
   await user.save();
+
+  await Session.updateMany({ user: user._id }, { isRevoked: true });
+
+  await AuditService.log({
+    user: user._id,
+    action: 'PASSWORD_CHANGE',
+    collectionName: 'User',
+    documentId: user._id,
+    ipAddress: req.ip
+  });
 
   res.json({ success: true, message: 'Password changed successfully' });
 });

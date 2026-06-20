@@ -20,6 +20,10 @@ export class AppError extends Error {
     return new AppError(message, 400, code, true);
   }
 
+  static conflict(message = 'Conflict', code = 'CONFLICT') {
+    return new AppError(message, 409, code, true);
+  }
+
   static internal(message = 'Internal server error', code = 'INTERNAL_ERROR') {
     return new AppError(message, 500, code, false);
   }

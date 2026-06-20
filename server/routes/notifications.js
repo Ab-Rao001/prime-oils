@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import Notification from '../models/Notification.js';
 import { formatNotification } from '../utils/format.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import { cache } from '../utils/cache.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import validate from '../middleware/validate.js';
@@ -14,11 +14,11 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize('admin', 'salesman', 'shopkeeper', 'supplier'), catchAsync(async (req, res) => {
-  const page = req.query.page ? parseInt(req.query.page, 10) : null;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+router.get('/', requirePermission('notifications.read'), catchAsync(async (req, res) => {
+  const { page, limit, skip } = getPagination(req.query);
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'date', 'type', 'priority'], { createdAt: -1 });
 
-  const cacheKey = `notifications:list:user:${req.user.id}:page:${page || 'all'}:limit:${limit || 'all'}`;
+  const cacheKey = `notifications:list:user:${req.user.id}:page:${page}:limit:${limit}:sort:${JSON.stringify(sort)}`;
   const cachedData = await cache.get(cacheKey);
   if (cachedData) {
     return res.json(cachedData);
@@ -31,28 +31,33 @@ router.get('/', authorize('admin', 'salesman', 'shopkeeper', 'supplier'), catchA
       { recipient: null, role: null }
     ] 
   };
-  let responseData;
 
-  if (page || limit) {
-    const paginatedResult = await paginate(Notification, filter, {
+  const [docs, total] = await Promise.all([
+    Notification.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Notification.countDocuments(filter)
+  ]);
+
+  const responseData = {
+    data: docs.map(formatNotification),
+    pagination: {
       page,
       limit,
-      sort: { createdAt: -1 },
-    });
-    responseData = {
-      data: paginatedResult.data.map(formatNotification),
-      pagination: paginatedResult.pagination,
-    };
-  } else {
-    const docs = await Notification.find(filter).sort({ createdAt: -1 }).lean();
-    responseData = docs.map(formatNotification);
-  }
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  };
 
   await cache.set(cacheKey, responseData, 60);
   res.json(responseData);
 }));
 
-router.post('/', authorize('admin'), validate(createNotificationSchema), catchAsync(async (req, res) => {
+router.post('/', requirePermission('notifications.send'), validate(createNotificationSchema), catchAsync(async (req, res) => {
   const d = new Date();
   const date = req.validatedBody.date || d.toLocaleString('en-US', { month: 'short', day: '2-digit' });
   const doc = await Notification.create({ ...req.validatedBody, date });
@@ -62,7 +67,7 @@ router.post('/', authorize('admin'), validate(createNotificationSchema), catchAs
   res.status(201).json(formatNotification(doc));
 }));
 
-router.patch('/:id/read', authorize('admin', 'salesman', 'shopkeeper', 'supplier'), catchAsync(async (req, res) => {
+router.patch('/:id/read', requirePermission('notifications.read'), catchAsync(async (req, res) => {
   const { id } = req.params;
   const query = { _id: id };
 
@@ -78,7 +83,7 @@ router.patch('/:id/read', authorize('admin', 'salesman', 'shopkeeper', 'supplier
   res.json(formatNotification(doc));
 }));
 
-router.post('/mark-all-read', authorize('admin', 'salesman', 'shopkeeper', 'supplier'), catchAsync(async (req, res) => {
+router.post('/mark-all-read', requirePermission('notifications.read'), catchAsync(async (req, res) => {
   const filter = { recipient: req.user.id, isRead: false };
   await Notification.updateMany(filter, { isRead: true, readAt: new Date() });
 

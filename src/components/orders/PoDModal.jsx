@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import C from '../../theme';
 import toast from 'react-hot-toast';
+import { LocationDisplay } from '../ui';
+import { formatNominatimAddress } from '../../utils/addressUtils';
 
 export default function PoDModal({ dispatch, onClose, onComplete }) {
   const [outcome, setOutcome] = useState('DELIVERED');
@@ -9,6 +11,7 @@ export default function PoDModal({ dispatch, onClose, onComplete }) {
   const [notes, setNotes] = useState('');
   const [failureReason, setFailureReason] = useState('');
   const [gps, setGps] = useState(null);
+  const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
   
   // Signature Canvas state
@@ -56,6 +59,19 @@ export default function PoDModal({ dispatch, onClose, onComplete }) {
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
+
+  useEffect(() => {
+    if (gps && gps.length === 2) {
+       const [lon, lat] = gps;
+       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`)
+         .then(res => res.json())
+         .then(data => {
+            const formatted = formatNominatimAddress(data, lat, lon);
+            setAddress(formatted);
+         })
+         .catch(err => console.error('Geocoding failed:', err));
+    }
+  }, [gps]);
 
   // Canvas Handlers
   const startDrawing = (e) => {
@@ -161,27 +177,44 @@ export default function PoDModal({ dispatch, onClose, onComplete }) {
   if (!dispatch) return null;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 20 }}>
-      <div style={{ background: C.card, borderRadius: 16, width: '100%', maxWidth: 700, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: 20, borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: 20, color: C.text }}>Proof of Delivery</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 24, color: C.muted, cursor: 'pointer' }}>&times;</button>
+    <div style={ { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 20 }}>
+      <div style={ { background: C.card, borderRadius: 16, width: '100%', maxWidth: 700, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={ { padding: 20, borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={ { margin: 0, fontSize: 20, color: C.text }}>Proof of Delivery</h2>
+          <button onClick={onClose} style={ { background: 'none', border: 'none', fontSize: 24, color: C.muted, cursor: 'pointer' }}>&times;</button>
         </div>
 
-        <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
-          <div style={{ marginBottom: 20, padding: 12, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 13, color: C.muted }}>Dispatch Route</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: C.gold }}>{dispatch.dispatchId}</div>
-            <div style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>Orders: {dispatch.orders?.length || 0}</div>
+        <div style={ { padding: 20, overflowY: 'auto', flex: 1 }}>
+          <div style={ { marginBottom: 20, padding: 12, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
+            <div style={ { fontSize: 13, color: C.muted }}>Dispatch Route</div>
+            <div style={ { fontSize: 16, fontWeight: 600, color: C.gold }}>{dispatch.dispatchId}</div>
+            <div style={ { fontSize: 13, color: C.muted, marginTop: 8 }}>Orders: {dispatch.orders?.length || 0}</div>
+            
+            <div style={ { marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 } }>
+              {dispatch.orders?.map(o => (
+                <div key={o.orderId || o.id || o._id} style={ { padding: '10px 12px', background: C.card, borderRadius: 6, border: `1px solid ${C.border}` } }>
+                  <div style={ { fontSize: 14, fontWeight: 'bold', color: C.text }}>{o.orderId || o.id} - {typeof o.shop === 'object' ? o.shop?.name : o.shop}</div>
+                  {typeof o.shop === 'object' && (
+                    <div style={ { fontSize: 12, color: C.muted, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 } }>
+                      <div>📍 <LocationDisplay loc={typeof (o.shop.location || o.shop.loc) === 'object' ? JSON.stringify((o.shop.location || o.shop.loc)?.coordinates || (o.shop.location || o.shop.loc)) : (o.shop.location || o.shop.loc)} /></div>
+                      <div>📞 {o.shop.contact || 'No contact provided'}</div>
+                    </div>
+                  )}
+                  <div style={ { fontSize: 13, color: C.success, marginTop: 6, fontWeight: 'bold' }}>
+                    💰 PKR {o.total?.toLocaleString() || '0'}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <form id="pod-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <form id="pod-form" onSubmit={handleSubmit} style={ { display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
-              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Delivery Outcome</label>
+              <label style={ { display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Delivery Outcome</label>
               <select 
                 value={outcome} 
                 onChange={e => setOutcome(e.target.value)}
-                style={{ width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text }}
+                style={ { width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text }}
               >
                 <option value="DELIVERED">Delivered</option>
                 <option value="FAILED">Delivery Failed</option>
@@ -190,68 +223,68 @@ export default function PoDModal({ dispatch, onClose, onComplete }) {
 
             {outcome === 'FAILED' ? (
               <div>
-                <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Failure Reason *</label>
+                <label style={ { display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Failure Reason *</label>
                 <textarea 
                   required 
                   value={failureReason} 
                   onChange={e => setFailureReason(e.target.value)}
                   placeholder="e.g. Shop closed, refused delivery..."
-                  style={{ width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.danger}88`, background: C.bg, color: C.text, minHeight: 80, boxSizing: 'border-box' }}
+                  style={ { width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.danger}88`, background: C.bg, color: C.text, minHeight: 80, boxSizing: 'border-box' }}
                 />
               </div>
             ) : (
               <>
-                <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-                  <div style={{ padding: 12, background: C.bg, fontWeight: 600, fontSize: 13, borderBottom: `1px solid ${C.border}` }}>Verify Item Quantities</div>
+                <div style={ { border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={ { padding: 12, background: C.bg, fontWeight: 600, fontSize: 13, borderBottom: `1px solid ${C.border}` }}>Verify Item Quantities</div>
                   {deliveryItems.map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottom: idx < deliveryItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>{item.productName}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>Expected: {item.expectedQuantity}</div>
+                    <div key={idx} style={ { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottom: idx < deliveryItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                      <div style={ { flex: 1 }}>
+                        <div style={ { fontSize: 14, fontWeight: 500, color: C.text }}>{item.productName}</div>
+                        <div style={ { fontSize: 12, color: C.muted }}>Expected: {item.expectedQuantity}</div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 12, color: C.muted }}>Delivered:</span>
+                      <div style={ { display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={ { fontSize: 12, color: C.muted }}>Delivered:</span>
                         <input 
                           type="number" 
                           min="0"
                           max={item.expectedQuantity}
                           value={item.deliveredQuantity} 
                           onChange={e => handleQuantityChange(idx, e.target.value)}
-                          style={{ width: 60, padding: 8, borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, textAlign: 'center' }}
+                          style={ { width: 60, padding: 8, borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, textAlign: 'center' }}
                         />
                       </div>
                     </div>
                   ))}
-                  {deliveryItems.length === 0 && <div style={{ padding: 12, color: C.muted, fontSize: 13 }}>No items found.</div>}
+                  {deliveryItems.length === 0 && <div style={ { padding: 12, color: C.muted, fontSize: 13 }}>No items found.</div>}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={ { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Receiver Name</label>
+                    <label style={ { display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Receiver Name</label>
                     <input 
                       type="text" 
                       value={receiverName} 
                       onChange={e => setReceiverName(e.target.value)}
                       placeholder="John Doe"
-                      style={{ width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, boxSizing: 'border-box' }}
+                      style={ { width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, boxSizing: 'border-box' }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Phone</label>
+                    <label style={ { display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Phone</label>
                     <input 
                       type="text" 
                       value={receiverPhone} 
                       onChange={e => setReceiverPhone(e.target.value)}
                       placeholder="0300..."
-                      style={{ width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, boxSizing: 'border-box' }}
+                      style={ { width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, boxSizing: 'border-box' }}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Customer Signature *</label>
-                    <button type="button" onClick={clearSignature} style={{ fontSize: 11, background: 'none', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 600 }}>Clear</button>
+                  <div style={ { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <label style={ { fontSize: 13, fontWeight: 600, color: C.text }}>Customer Signature *</label>
+                    <button type="button" onClick={clearSignature} style={ { fontSize: 11, background: 'none', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 600 }}>Clear</button>
                   </div>
                   <canvas
                     ref={canvasRef}
@@ -264,24 +297,24 @@ export default function PoDModal({ dispatch, onClose, onComplete }) {
                     onTouchStart={startDrawing}
                     onTouchMove={draw}
                     onTouchEnd={stopDrawing}
-                    style={{ width: '100%', background: '#fff', border: `1px dashed ${C.border}`, borderRadius: 8, touchAction: 'none' }}
+                    style={ { width: '100%', background: '#fff', border: `1px dashed ${C.border}`, borderRadius: 8, touchAction: 'none' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Photo Evidence (Optional)</label>
+                  <label style={ { display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: C.text }}>Photo Evidence (Optional)</label>
                   <input 
                     type="file" 
                     accept="image/*" 
                     capture="environment"
                     multiple
                     onChange={handlePhotoUpload}
-                    style={{ display: 'block', width: '100%', padding: 8, fontSize: 13 }}
+                    style={ { display: 'block', width: '100%', padding: 8, fontSize: 13 }}
                   />
                   {photos.length > 0 && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12, overflowX: 'auto' }}>
+                    <div style={ { display: 'flex', gap: 8, marginTop: 12, overflowX: 'auto' }}>
                       {photos.map((src, idx) => (
-                        <img key={idx} src={src} alt={`evidence-${idx}`} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 6, border: `1px solid ${C.border}` }} />
+                        <img key={idx} src={src} alt={`evidence-${idx}`} style={ { width: 60, height: 60, objectFit: 'cover', borderRadius: 6, border: `1px solid ${C.border}` }} />
                       ))}
                     </div>
                   )}
@@ -289,8 +322,15 @@ export default function PoDModal({ dispatch, onClose, onComplete }) {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, background: gps ? `${C.success}11` : `${C.warn}11`, borderRadius: 8, border: `1px solid ${gps ? C.success : C.warn}44` }}>
                   <span style={{ fontSize: 20 }}>{gps ? '📍' : '⏳'}</span>
-                  <div style={{ fontSize: 13, color: C.text }}>
-                    {gps ? `GPS Location Captured: [${gps[0].toFixed(4)}, ${gps[1].toFixed(4)}]` : 'Acquiring GPS location...'}
+                  <div style={{ flex: 1 }}>
+                    {gps ? (
+                      <div>
+                        <div style={{ fontWeight: 600, color: C.success }}>Location Captured</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{address || `Coordinates: [${gps[1].toFixed(4)}, ${gps[0].toFixed(4)}]`}</div>
+                      </div>
+                    ) : (
+                      <div style={{ fontWeight: 600, color: C.warn }}>Acquiring GPS location...</div>
+                    )}
                   </div>
                 </div>
               </>
@@ -298,11 +338,11 @@ export default function PoDModal({ dispatch, onClose, onComplete }) {
           </form>
         </div>
 
-        <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: 'flex', gap: 12, background: C.bg }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ flex: 1, padding: 12, background: 'transparent', border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+        <div style={ { padding: 20, borderTop: `1px solid ${C.border}`, display: 'flex', gap: 12, background: C.bg }}>
+          <button type="button" onClick={onClose} disabled={loading} style={ { flex: 1, padding: 12, background: 'transparent', border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
             Cancel
           </button>
-          <button type="submit" form="pod-form" disabled={loading} style={{ flex: 1, padding: 12, background: outcome === 'FAILED' ? C.danger : C.success, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+          <button type="submit" form="pod-form" disabled={loading} style={ { flex: 1, padding: 12, background: outcome === 'FAILED' ? C.danger : C.success, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
             {loading ? 'Submitting...' : 'Complete Delivery'}
           </button>
         </div>

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import { getReportsSummary, fetchExportData } from '../services/reportsSummary.js';
@@ -9,7 +9,7 @@ import { streamOrdersPdf, streamOrdersExcel } from '../utils/reportExport.js';
 const router = Router();
 
 router.use(authenticate);
-router.use(authorize('admin', 'salesman', 'shopkeeper'));
+router.use(requirePermission('reports.read'));
 
 router.get('/summary', catchAsync(async (req, res) => {
   const { startDate, endDate } = req.query;

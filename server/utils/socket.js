@@ -4,6 +4,12 @@ import logger from './logger.js';
 
 let io;
 
+const activeConnections = new Map();
+
+export const getOnlineUsers = () => {
+  return Array.from(activeConnections.keys());
+};
+
 export const initIO = (httpServer, allowedOrigins) => {
   io = new Server(httpServer, {
     cors: {
@@ -22,6 +28,9 @@ export const initIO = (httpServer, allowedOrigins) => {
     // Join user-specific room
     if (socket.user?.id) {
       socket.join(`user_${socket.user.id}`);
+      
+      const count = activeConnections.get(socket.user.id) || 0;
+      activeConnections.set(socket.user.id, count + 1);
     }
 
     // Join role-specific room
@@ -31,6 +40,14 @@ export const initIO = (httpServer, allowedOrigins) => {
 
     socket.on('disconnect', () => {
       logger.info(`Socket disconnected: ${socket.id}`);
+      if (socket.user?.id) {
+        const count = activeConnections.get(socket.user.id) || 0;
+        if (count <= 1) {
+          activeConnections.delete(socket.user.id);
+        } else {
+          activeConnections.set(socket.user.id, count - 1);
+        }
+      }
     });
   });
 

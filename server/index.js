@@ -8,10 +8,17 @@ import hpp from 'hpp';
 import mongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
+import { authLimiter, generalLimiter, paymentsLimiter, orderLimiter, returnsLimiter } from './middleware/rateLimiters.js';
+import securityLogger from './middleware/securityLogger.js';
+import contextMiddleware from './middleware/requestContextMiddleware.js';
 
 import http from 'http';
+import { redisClient } from './utils/cache.js';
+import { closeQueues } from './services/QueueService.js';
 import { connectDB } from './config/db.js';
 import { initIO } from './utils/socket.js';
+import { setupAuthCleanupJob } from './jobs/authCleanup.js';
+import { initWorkers } from './services/QueueService.js';
 import productsRouter from './routes/products.js';
 import purchaseOrdersRouter from './routes/purchaseOrders.js';
 import dispatchesRouter from './routes/dispatches.js';
@@ -31,6 +38,7 @@ import approvalsRouter from './routes/approvals.js';
 import dispatchRouter from './routes/dispatch.js';
 import expensesRouter from './routes/expenses.js';
 import returnsRouter from './routes/returns.js';
+import creditNotesRouter from './routes/creditNotes.js';
 import transfersRouter from './routes/transfers.js';
 import vehiclesRouter from './routes/vehicles.js';
 import logger from './utils/logger.js';
@@ -41,6 +49,18 @@ import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 const PORT = config.port;
+
+// Disable ETags globally — prevents browsers from caching API responses
+// and serving stale 304 Not Modified responses instead of fresh data.
+app.disable('etag');
+
+// Add no-cache headers to all API responses
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 
 // Trust local development and production proxy headers (required for express-rate-limit)
 app.set('trust proxy', 1);
@@ -55,33 +75,20 @@ app.use(
       },
     },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    noSniff: true,
+    frameguard: { action: 'deny' },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    hidePoweredBy: true,
   })
 );
+
+// Add security logger
+app.use(securityLogger);
 
 // 2. Strict CORS Configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : ['http://localhost:3000', 'http://localhost:5173'];
-
-app.use((req, res, next) => {
-  let origin = req.headers.origin;
-  if (!origin) return next();
-  
-  // Normalize origin by stripping trailing slash
-  origin = origin.replace(/\/$/, '');
-  
-  // Allow local origins on any port in development
-  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-  if (process.env.NODE_ENV !== 'production' && isLocal) {
-    return next();
-  }
-
-  if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-    return next();
-  }
-  logger.warn(`CORS Reject: Origin "${origin}" is not in allowed origins: ${JSON.stringify(allowedOrigins)}`);
-  return res.status(403).json({ success: false, message: 'Origin not permitted' });
-});
 
 app.use(
   cors({
@@ -92,51 +99,20 @@ app.use(
       if (process.env.NODE_ENV !== 'production' && isLocal) {
         return callback(null, true);
       }
-      if (allowedOrigins.length === 0 || allowedOrigins.includes(cleanOrigin)) {
+      if (allowedOrigins.includes(cleanOrigin)) {
         return callback(null, true);
       }
-      return callback(null, false);
+      logger.warn(`CORS Reject: Origin "${origin}" is not allowed`);
+      return callback(new Error('Origin not permitted'), false);
     },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   })
 );
 
 // 3. Global and Specialized Rate Limiters
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes.' },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per window
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many login attempts, please try again after 15 minutes.' },
-});
-
-const writeLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // Limit each IP to 30 write requests per minute
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many write operations, please slow down.' },
-});
-
-// Middleware to apply writeLimiter only to write methods (POST, PUT, PATCH, DELETE)
-const inventoryOrderWriteLimiter = (req, res, next) => {
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-    return writeLimiter(req, res, next);
-  }
-  next();
-};
-
-app.use(globalLimiter);
+app.use(generalLimiter);
 
 // Add Request ID middleware
 app.use((req, res, next) => {
@@ -146,25 +122,48 @@ app.use((req, res, next) => {
   next();
 });
 
+// Setup Async Context
+app.use(contextMiddleware);
+
 app.use(requestLogger);
 
 // 4. Request Parsing and Parameter Protection
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 app.use(mongoSanitize());
 app.use(hpp());
 app.use(compression());
 
-// Health check and Metrics (no auth required)
-app.get('/api/health', (req, res) => res.json({ 
-  ok: true,
-  timestamp: new Date().toISOString(),
-  uptime: process.uptime()
+import mongoose from 'mongoose';
+import { isRedisConnected } from './utils/cache.js';
+import { getWorkerStatus } from './services/QueueService.js';
+
+// Health check endpoints (no auth required)
+app.get('/api/health', (req, res) => res.json({
+  uptime: process.uptime(),
+  environment: process.env.NODE_ENV || 'development',
+  version: process.env.npm_package_version || '1.0.0',
+  timestamp: new Date().toISOString()
 }));
 
-app.get('/api/metrics', (req, res) => {
+app.get('/health/live', (req, res) => res.status(200).send('OK'));
+
+app.get('/health/ready', (req, res) => {
+  const isMongoReady = mongoose.connection.readyState === 1;
+  const isRedisReady = isRedisConnected;
+  if (isMongoReady && isRedisReady) {
+    res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+  } else {
+    res.status(503).json({ status: 'not ready', mongodb: isMongoReady, redis: isRedisReady });
+  }
+});
+
+app.get('/api/health/detailed', (req, res) => {
   res.json({
-    uptime: process.uptime(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    redis: isRedisConnected ? 'connected' : 'disconnected',
+    queue: getWorkerStatus ? getWorkerStatus() : 'running',
     memoryUsage: process.memoryUsage(),
     cpuUsage: process.cpuUsage(),
     timestamp: new Date().toISOString()
@@ -172,16 +171,18 @@ app.get('/api/metrics', (req, res) => {
 });
 
 // 5. Routes definitions (ordered properly)
-app.use('/api/auth', authLimiter, authRouter);
-app.use('/api/products', inventoryOrderWriteLimiter, productsRouter);
-app.use('/api/orders', inventoryOrderWriteLimiter, ordersRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/orders', ordersRouter);
+app.use('/api/returns', returnsRouter);
+
+// Other routes
+app.use('/api/products', productsRouter);
 app.use('/api/shopkeepers', shopkeepersRouter);
 app.use('/api/complaints', complaintsRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/purchaseOrders', purchaseOrdersRouter);
-app.use('/api/dispatches', dispatchesRouter);
 app.use('/api/charts', chartsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
@@ -190,7 +191,7 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/approvals', approvalsRouter);
 app.use('/api/dispatch', dispatchRouter);
 app.use('/api/expenses', expensesRouter);
-app.use('/api/returns', returnsRouter);
+app.use('/api/credit-notes', creditNotesRouter);
 app.use('/api/transfers', transfersRouter);
 app.use('/api/vehicles', vehiclesRouter);
 
@@ -202,9 +203,12 @@ app.use((req, res, next) => {
 // Central Error Handler Middleware
 app.use(errorHandler);
 
+let serverInstance;
+
 async function start() {
   await connectDB();
   const httpServer = http.createServer(app);
+  serverInstance = httpServer;
   
   // Initialize Socket.io
   const allowedOriginsList = process.env.ALLOWED_ORIGINS
@@ -212,9 +216,53 @@ async function start() {
   : ['http://localhost:3000', 'http://localhost:5173'];
   
   initIO(httpServer, allowedOriginsList);
+  setupAuthCleanupJob();
+  initWorkers();
   
   httpServer.listen(PORT, () => logger.info(`API and Socket.IO running on http://localhost:${PORT}`));
 }
+
+// Graceful Shutdown
+async function gracefulShutdown(signal) {
+  logger.info(`Received ${signal}. Shutting down gracefully...`);
+  try {
+    if (serverInstance) {
+      serverInstance.close(() => {
+        logger.info('HTTP server closed.');
+      });
+    }
+    await mongoose.connection.close();
+    logger.info('MongoDB connections closed.');
+
+    if (redisClient) {
+      await redisClient.quit();
+      logger.info('Redis client disconnected.');
+    }
+
+    if (typeof closeQueues === 'function') {
+      await closeQueues();
+      logger.info('Queues drained and closed.');
+    }
+
+    process.exit(0);
+  } catch (err) {
+    logger.error('Error during graceful shutdown:', err);
+    process.exit(1);
+  }
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+process.on('uncaughtException', (err) => {
+  logger.error(`UNCAUGHT EXCEPTION: ${err.message}`, { stack: err.stack });
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`UNHANDLED REJECTION: ${reason}`, { promise });
+  gracefulShutdown('unhandledRejection');
+});
 
 if (process.env.NODE_ENV !== 'test') {
   start().catch(err => {
@@ -224,3 +272,4 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 export default app;
+// Trigger restart

@@ -4,10 +4,14 @@ import SectionHeader from '../components/SectionHeader';
 import PageLoader from '../components/PageLoader';
 import { userApi } from '../api/userApi';
 import toast from 'react-hot-toast';
+import { formatNominatimAddress } from '../utils/addressUtils';
+import { EnterpriseModal, MapSelector } from '../components/ui';
 
 export default function Profile({ user }) {
   const [loading, setLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [mapPin, setMapPin] = useState({ lat: 31.5204, lng: 74.3587 }); // Default to Lahore
   const [profile, setProfile] = useState({
     name: '',
     email: '',
@@ -93,16 +97,16 @@ export default function Profile({ user }) {
   };
 
   return (
-    <div className="page-enter" style={{ maxWidth: 800, margin: '0 auto' }}>
+    <div className="page-enter" style={ { maxWidth: 800, margin: '0 auto' }}>
       <SectionHeader title="My Profile" />
 
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: '30px', marginTop: 20 }}>
+      <div style={ { background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: '30px', marginTop: 20 }}>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 30, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ position: 'relative' }}>
+        <div style={ { display: 'flex', alignItems: 'center', gap: 20, marginBottom: 30, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
+          <div style={ { position: 'relative' }}>
             <label 
               htmlFor="avatar-upload"
-              style={{
+              style={ {
                 display: 'block',
                 width: 80, height: 80, borderRadius: '50%', background: C.goldBg,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -112,13 +116,13 @@ export default function Profile({ user }) {
               }}
             >
               {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={profile.avatarUrl} alt="Avatar" style={ { width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 profile.name.charAt(0).toUpperCase()
               )}
               {uploadingAvatar && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ width: 24, height: 24, border: '3px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                <div style={ { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={ { width: 24, height: 24, border: '3px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                 </div>
               )}
             </label>
@@ -128,52 +132,52 @@ export default function Profile({ user }) {
               accept="image/jpeg,image/png" 
               onChange={handleAvatarChange} 
               disabled={uploadingAvatar}
-              style={{ display: 'none' }} 
+              style={ { display: 'none' }} 
             />
-            <div style={{ position: 'absolute', bottom: -4, right: -4, background: C.card, borderRadius: '50%', padding: 4 }}>
-              <div style={{ width: 24, height: 24, background: C.gold, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', pointerEvents: 'none' }}>
-                <span style={{ fontSize: 12 }}>✏️</span>
+            <div style={ { position: 'absolute', bottom: -4, right: -4, background: C.card, borderRadius: '50%', padding: 4 }}>
+              <div style={ { width: 24, height: 24, background: C.gold, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', pointerEvents: 'none' }}>
+                <span style={ { fontSize: 12 }}>✏️</span>
               </div>
             </div>
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: 24, color: C.text, marginBottom: 4 }}>{profile.name}</h2>
-            <div style={{ fontSize: 13, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+            <h2 style={ { margin: 0, fontSize: 24, color: C.text, marginBottom: 4 }}>{profile.name}</h2>
+            <div style={ { fontSize: 13, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
               {profile.role}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.success }}></span>
-              <span style={{ fontSize: 12, color: C.success, fontWeight: 600 }}>Active Online</span>
+            <div style={ { display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+              <span style={ { width: 8, height: 8, borderRadius: '50%', background: C.success }}></span>
+              <span style={ { fontSize: 12, color: C.success, fontWeight: 600 }}>Active Online</span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div style={ { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
+            <label style={ { display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
               Full Name
             </label>
             <input
               name="name"
               value={profile.name}
               onChange={handleChange}
-              style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.text, fontSize: 14, outline: 'none' }}
+              style={ { width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.text, fontSize: 14, outline: 'none' }}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
+            <label style={ { display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
               Email Address (Cannot change)
             </label>
             <input
               value={profile.email}
               readOnly
-              style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.muted, fontSize: 14, outline: 'none', cursor: 'not-allowed' }}
+              style={ { width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.muted, fontSize: 14, outline: 'none', cursor: 'not-allowed' }}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
+            <label style={ { display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
               Phone Number
             </label>
             <input
@@ -181,44 +185,67 @@ export default function Profile({ user }) {
               value={profile.phone}
               onChange={handleChange}
               placeholder="+92 300 1234567"
-              style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.text, fontSize: 14, outline: 'none' }}
+              style={ { width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.text, fontSize: 14, outline: 'none' }}
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
-              Address (or Maps Coordinates)
-            </label>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <input
-                name="address"
-                value={profile.address}
-                onChange={handleChange}
-                placeholder="123 Main St, City or Google Maps Link"
-                style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.text, fontSize: 14, outline: 'none', marginBottom: '4px' }}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(pos => {
-                      setProfile({ ...profile, address: `${pos.coords.latitude},${pos.coords.longitude}` });
-                    }, () => alert('Unable to retrieve your location'));
-                  }
-                }}
-                style={{ fontSize: 11, color: C.gold, background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600, padding: '2px 0' }}
-              >
-                📍 Use My Current Location
-              </button>
+          {profile.role === 'shopkeeper' && (
+            <div>
+              <label style={ { display: 'block', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
+                Address / GPS Location
+              </label>
+              <div style={ { display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input
+                    name="address"
+                    value={profile.address}
+                    onChange={handleChange}
+                    placeholder="E.g. 31.5204, 74.3587 or 123 Main St"
+                    style={ { flex: 1, padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, background: C.bg, color: C.text, fontSize: 14, outline: 'none', marginBottom: '4px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowMapModal(true)}
+                    style={{ padding: '0 16px', border: `1.5px solid ${C.gold}`, background: C.goldBg, color: C.gold, borderRadius: 10, cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    🗺️ Pick on Map
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      toast.loading('Fetching location...', { id: 'geo' });
+                      navigator.geolocation.getCurrentPosition(pos => {
+                        const lat = pos.coords.latitude;
+                        const lon = pos.coords.longitude;
+                        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`)
+                          .then(res => res.json())
+                          .then(data => {
+                             const addr = formatNominatimAddress(data, lat, lon);
+                             setProfile({ ...profile, address: addr });
+                             toast.success("Location fetched successfully!", { id: 'geo' });
+                          }).catch(() => {
+                             setProfile({ ...profile, address: `${lat},${lon}` });
+                             toast.success("Coordinates fetched successfully!", { id: 'geo' });
+                          });
+                      }, () => toast.error('Unable to retrieve your location', { id: 'geo' }));
+                    }
+                  }}
+                  style={ { fontSize: 11, color: C.gold, background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600, padding: '2px 0', width: 'fit-content' }}
+                >
+                  📍 Use My Current Location
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <div style={{ marginTop: 30, display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={ { marginTop: 30, display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={handleSave}
             disabled={loading}
-            style={{
+            style={ {
               padding: '12px 24px',
               background: C.gold,
               border: 'none',
@@ -236,6 +263,46 @@ export default function Profile({ user }) {
         </div>
 
       </div>
+      
+      <EnterpriseModal
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        title="Choose Location on Map"
+      >
+        <div style={{ padding: 20 }}>
+          <p style={{ fontSize: 13, color: C.muted, marginBottom: 15 }}>Drag the map or click anywhere to set your exact store coordinates.</p>
+          <MapSelector 
+            initialPosition={{ lat: parseFloat(mapPin.lat), lng: parseFloat(mapPin.lng) }} 
+            onPositionChange={(pos) => setMapPin({ lat: pos.lat.toFixed(5), lng: pos.lng.toFixed(5) })} 
+          />
+          <div style={{ marginTop: 20, display: 'flex', gap: 15, alignItems: 'center' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 11, color: C.muted, fontWeight: 'bold' }}>Selected Coordinates</label>
+              <div style={{ fontSize: 14, fontWeight: 'bold', color: C.text }}>{mapPin.lat}, {mapPin.lng}</div>
+            </div>
+            <button 
+              onClick={() => {
+                toast.loading('Mapping address...', { id: 'geo-map' });
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${mapPin.lat}&lon=${mapPin.lng}&zoom=18&addressdetails=1`)
+                  .then(res => res.json())
+                  .then(data => {
+                     const addr = formatNominatimAddress(data, mapPin.lat, mapPin.lng);
+                     setProfile({ ...profile, address: addr });
+                     setShowMapModal(false);
+                     toast.success('Location mapped successfully!', { id: 'geo-map' });
+                  }).catch(() => {
+                     setProfile({ ...profile, address: `${mapPin.lat},${mapPin.lng}` });
+                     setShowMapModal(false);
+                     toast.success('Coordinates mapped successfully!', { id: 'geo-map' });
+                  });
+              }}
+              style={{ padding: '10px 20px', background: C.gold, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Confirm Location
+            </button>
+          </div>
+        </div>
+      </EnterpriseModal>
     </div>
   );
 }

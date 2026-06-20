@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import {
   getDispatches,
   getVehicles,
@@ -12,9 +12,9 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize('admin', 'supplier', 'salesman', 'driver'), getDispatches);
-router.get('/vehicles', authorize('admin', 'supplier'), getVehicles);
-router.post('/', authorize('admin', 'supplier'), createDispatch);
-router.patch('/:id/status', authorize('admin', 'supplier', 'salesman', 'driver'), updateDispatchStatus);
+router.get('/', requirePermission('dispatch.read'), getDispatches);
+router.get('/vehicles', requirePermission('dispatch.read'), getVehicles);
+router.post('/', requirePermission('dispatch.manage'), createDispatch);
+router.patch('/:id/status', requirePermission('delivery.complete'), updateDispatchStatus);
 
 export default router;

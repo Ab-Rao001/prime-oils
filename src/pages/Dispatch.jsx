@@ -1,25 +1,33 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import C from '../theme';
+import React, { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import SectionHeader from '../components/SectionHeader';
 import { useFetch } from '../hooks/useFetch';
 import { dispatchApi } from '../api/dispatchApi';
-import { orderApi } from '../api/orderApi';
 import { userApi } from '../api/userApi';
-import Badge from '../components/Badge';
+import { useOrders } from '../queries/useOrders';
 import { SkeletonTable } from '../components/common/Skeleton';
-import { THead, TRow, TCell } from '../components/Table';
-import ConfirmDialog from '../components/common/ConfirmDialog';
-import EmptyState from '../components/common/EmptyState';
+import DataGrid from '../components/DataGrid';
+import { ConfirmationDialog, EnterpriseModal, Typography, Button, Input, Select, Badge, LocationDisplay } from '../components/ui';
 import PoDModal from '../components/orders/PoDModal';
 import toast from 'react-hot-toast';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const vehicleSchema = z.object({
+  plateNumber: z.string().min(1, 'Plate number is required'),
+  model: z.string().min(1, 'Model is required'),
+  capacity: z.number({ invalid_type_error: "Capacity is required" }).positive("Capacity must be positive")
+});
 
 export default function Dispatch({ role, users }) {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('routes');
   
   const { data: dispatches, setData: setDispatches, loading: loadingD } = useFetch(() => dispatchApi.getDispatches(), []);
   const { data: vehicles, setData: setVehicles, loading: loadingV } = useFetch(() => dispatchApi.getVehicles(), []);
-  const { data: orders, setData: setOrders, loading: loadingO } = useFetch(() => orderApi.getOrders({}), []);
-  const { data: fetchedSalesmen } = useFetch(() => userApi.getSalesmen(), []);
+  const { data: orders = [], isPending: loadingO } = useOrders({ status: 'ready_for_dispatch' });
+  const { data: fetchedUsers } = useFetch(() => userApi.getUsers(), []);
   
   const [showModal, setShowModal] = useState(false);
   const [podDispatch, setPodDispatch] = useState(null);
@@ -29,12 +37,30 @@ export default function Dispatch({ role, users }) {
   
   const [form, setForm] = useState({ vehicle: '', driver: '', orders: [], notes: '' });
 
-  const salesmen = useMemo(() => {
-    if (fetchedSalesmen && fetchedSalesmen.length > 0) return fetchedSalesmen;
-    return (users || []).filter(u => u.role === 'salesman');
-  }, [users, fetchedSalesmen]);
+  const { register: registerVehicle, handleSubmit: handleVehicleSubmit, formState: { errors: vehicleErrors, isSubmitting: savingVehicle }, reset: resetVehicle } = useForm({
+    resolver: zodResolver(vehicleSchema),
+    defaultValues: { plateNumber: '', model: '', capacity: '' }
+  });
 
-  const pendingOrders = useMemo(() => (orders || []).filter(o => o.status === 'ready_for_dispatch'), [orders]);
+  const suppliers = useMemo(() => {
+    const all = (users && users.length > 0) ? users : (fetchedUsers || []);
+    return all.filter(u => u.role === 'supplier');
+  }, [users, fetchedUsers]);
+
+  const pendingOrders = useMemo(() => {
+    const activeOrderIds = new Set();
+    if (dispatches && Array.isArray(dispatches)) {
+      dispatches.forEach(d => {
+        if (d.status === 'scheduled' || d.status === 'in-transit') {
+           d.orders?.forEach(o => {
+             const oid = typeof o === 'object' ? o._id : o;
+             if (oid) activeOrderIds.add(oid.toString());
+           });
+        }
+      });
+    }
+    return orders.filter(o => !activeOrderIds.has(o._id?.toString()));
+  }, [orders, dispatches]);
 
   const handleOrderToggle = (orderId) => {
       setForm(prev => {
@@ -49,15 +75,15 @@ export default function Dispatch({ role, users }) {
 
   const handleCreateRoute = async (e) => {
       e.preventDefault();
-      if (!form.vehicle || !form.driver) return toast.error('Select Vehicle and Driver');
-      if (form.orders.length === 0) return toast.error('Select at least one order to dispatch');
-      
       setSaving(true);
       try {
-          const created = await dispatchApi.createDispatch(form);
+          const payload = { ...form };
+          delete payload.driver; // No longer needed
+          const created = await dispatchApi.createDispatch(payload);
           setDispatches(prev => [created, ...prev]);
           setShowModal(false);
           setForm({ vehicle: '', driver: '', orders: [], notes: '' });
+          queryClient.invalidateQueries({ queryKey: ['orders'] });
           toast.success('Dispatch route created');
       } catch (err) {
           toast.error(err.message || 'Failed to create route');
@@ -79,6 +105,7 @@ export default function Dispatch({ role, users }) {
               const updated = await dispatchApi.startDispatch(id);
               setDispatches(prev => prev.map(d => d._id === updated._id ? updated : d));
               toast.success('Route started');
+              setConfirmState({ isOpen: false, type: '', id: null });
           } catch (err) {
               toast.error('Failed to start');
           }
@@ -91,12 +118,7 @@ export default function Dispatch({ role, users }) {
           setDispatches(prev => prev.map(d => d._id === updated._id ? updated : d));
           
           if (payload.outcome === 'DELIVERED' || payload.outcome === 'PARTIAL') {
-            setOrders(prev => prev.map(o => {
-                if(updated.orders.some(uo => uo._id === o.id || uo._id === o._id)) {
-                    return { ...o, status: 'delivered' };
-                }
-                return o;
-            }));
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
             toast.success('PoD submitted. Route completed and orders delivered.');
           } else {
             toast.success('PoD submitted. Delivery failed.');
@@ -107,51 +129,80 @@ export default function Dispatch({ role, users }) {
       }
   };
 
-  const [vehForm, setVehForm] = useState({ plateNumber: '', model: '', capacity: '' });
-  const handleAddVehicle = async (e) => {
-      e.preventDefault();
+  const handleAddVehicle = async (data) => {
       try {
-          const created = await dispatchApi.createVehicle(vehForm);
+          const created = await dispatchApi.createVehicle(data);
           setVehicles(prev => [created, ...prev]);
-          setVehForm({ plateNumber: '', model: '', capacity: '' });
+          resetVehicle();
           toast.success('Vehicle added');
       } catch (err) {
           toast.error('Failed to add vehicle');
       }
   };
 
+  const routeColumns = useMemo(() => [
+    { header: 'Dispatch ID', accessorKey: 'dispatchId', sortable: true, cell: (d) => <Typography variant="body" weight="semibold">{d.dispatchId}</Typography> },
+    { header: 'Vehicle', accessorKey: 'vehicle', cell: (d) => `${d.vehicle?.plateNumber || ''} (${d.vehicle?.model || ''})` },
+    { header: 'Driver', accessorKey: 'driver', cell: (d) => d.driver?.name },
+    { header: 'Orders Included', accessorKey: 'orders', cell: (d) => <div className="text-xs font-semibold">{d.orders?.length || 0} Orders</div> },
+    { header: 'Status', accessorKey: 'status', sortable: true, cell: (d) => <Badge variant={d.status === 'completed' ? 'success' : d.status === 'in-transit' ? 'info' : 'warning'}>{d.status}</Badge> },
+    { header: 'Actions', width: 220, cell: (d) => (
+      <div className="flex gap-2 items-center">
+        {d.status === 'scheduled' && (
+          <Button size="xs" variant="primary" onClick={() => setLoadInventoryDispatch(d)}>
+            Load Inventory
+          </Button>
+        )}
+        {d.status === 'in-transit' && (
+          <div className="flex gap-2 items-center">
+            <Button size="xs" variant="outline" onClick={() => {
+              const firstOrderLoc = d.orders?.[0]?.shop?.loc || '';
+              window.open(`https://maps.google.com/?q=${encodeURIComponent(firstOrderLoc || 'Pakistan')}`, '_blank');
+            }}>
+              Map
+            </Button>
+            <Button size="xs" variant="primary" onClick={() => setPodDispatch(d)}>
+              Resolve Route
+            </Button>
+          </div>
+        )}
+        {d.status === 'completed' && (
+            <div className="text-[11px] text-muted-foreground">Returned: {new Date(d.arrivalTime).toLocaleString()}</div>
+        )}
+      </div>
+    )}
+  ], []);
+
+  const fleetColumns = useMemo(() => [
+    { header: 'Plate', accessorKey: 'plateNumber', sortable: true, cell: (v) => <Typography variant="body" weight="semibold">{v.plateNumber}</Typography> },
+    { header: 'Model', accessorKey: 'model', sortable: true },
+    { header: 'Capacity', accessorKey: 'capacity', sortable: true, cell: (v) => `${v.capacity} Units` },
+    { header: 'Status', accessorKey: 'status', sortable: true, cell: (v) => <Badge variant={v.status === 'active' ? 'success' : 'danger'}>{v.status}</Badge> }
+  ], []);
+
   if (loadingD || loadingV || loadingO) {
     return (
-      <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <SectionHeader title="Fleet & Dispatch Routing" />
+      <div className="page-enter flex flex-col gap-5">
+        <SectionHeader title="Vehicles & Dispatch Routing" />
         <SkeletonTable rows={5} cols={6} />
       </div>
     );
   }
 
   return (
-    <div className="page-enter">
+    <div className="page-enter flex flex-col h-full">
       <SectionHeader 
-          title="Fleet & Dispatch Routing" 
+          title="Vehicles & Dispatch Routing" 
           action={(role === 'admin' || role === 'supplier') && activeTab === 'routes' ? "Create Route" : null} 
           onAction={() => setShowModal(true)} 
       />
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-          {['routes', 'fleet'].map(tab => (
+      <div className="flex gap-3 mb-6">
+          {['routes', 'vehicles'].map(tab => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                style={{
-                    padding: '8px 20px',
-                    borderRadius: 20,
-                    border: `1px solid ${activeTab === tab ? C.gold : C.border}`,
-                    background: activeTab === tab ? `${C.gold}22` : C.card,
-                    color: activeTab === tab ? C.gold : C.text,
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    textTransform: 'capitalize'
-                }}
+                className={`py-2 px-5 rounded-full border cursor-pointer font-semibold capitalize transition-colors duration-200 ${activeTab === tab ? 'border-gold bg-gold/15 text-gold' : 'border-border dark:border-border-dark bg-card text-foreground'}`}
               >
                   {tab}
               </button>
@@ -159,207 +210,199 @@ export default function Dispatch({ role, users }) {
       </div>
 
       {activeTab === 'routes' && (
-        <div className="table-responsive-container" style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-            <THead cols={['Dispatch ID', 'Vehicle', 'Driver', 'Orders Included', 'Status', 'Actions']} />
-            <tbody>
-              {dispatches.length === 0 ? (
-                <tr><td colSpan={6} style={{ padding: 0 }}><EmptyState title="No Dispatches" message="No dispatch routes found." icon="🚚" /></td></tr>
-              ) : dispatches.map(d => (
-                <TRow key={d._id}>
-                  <TCell bold>{d.dispatchId}</TCell>
-                  <TCell>{d.vehicle?.plateNumber} ({d.vehicle?.model})</TCell>
-                  <TCell>{d.driver?.name}</TCell>
-                  <TCell>
-                      <div style={{ fontSize: 12, fontWeight: 600 }}>{d.orders?.length || 0} Orders</div>
-                  </TCell>
-                  <TCell><Badge s={d.status} /></TCell>
-                  <TCell>
-                    {d.status === 'scheduled' && (
-                      <button onClick={() => setLoadInventoryDispatch(d)} style={{ padding: '6px 12px', background: C.info, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        Load Inventory
-                      </button>
-                    )}
-                    {d.status === 'in-transit' && (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button onClick={() => {
-                          const firstOrderLoc = d.orders?.[0]?.shop?.loc || '';
-                          window.open(`https://maps.google.com/?q=${encodeURIComponent(firstOrderLoc || 'Pakistan')}`, '_blank');
-                        }} style={{ padding: '6px 10px', background: '#e3f2fd', color: '#1976d2', border: `1px solid #90caf9`, borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                          📍 Nav
-                        </button>
-                        <button onClick={() => setPodDispatch(d)} style={{ padding: '6px 12px', background: C.success, color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                          Resolve Route
-                        </button>
-                      </div>
-                    )}
-                    {d.status === 'completed' && (
-                        <div style={{ fontSize: 11, color: C.muted }}>Returned: {new Date(d.arrivalTime).toLocaleString()}</div>
-                    )}
-                  </TCell>
-                </TRow>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-col gap-6 flex-1 min-h-[400px]">
+          {pendingOrders.length > 0 && (
+            <div className="bg-card border border-border dark:border-border-dark p-4 rounded-xl shadow-sm">
+               <div className="flex justify-between items-center mb-3">
+                 <Typography variant="h3" className="m-0 text-foreground">Pending Orders to Dispatch</Typography>
+                 <Badge variant="warning">{pendingOrders.length} Ready</Badge>
+               </div>
+               <div className="overflow-x-auto">
+                 <table className="w-full text-left border-collapse text-sm text-foreground">
+                   <thead>
+                     <tr className="border-b border-border dark:border-border-dark">
+                       <th className="py-2 px-3 font-semibold text-muted-foreground">ORDER ID</th>
+                       <th className="py-2 px-3 font-semibold text-muted-foreground">SHOP</th>
+                       <th className="py-2 px-3 font-semibold text-muted-foreground">ITEMS</th>
+                       <th className="py-2 px-3 font-semibold text-muted-foreground">DATE</th>
+                       <th className="py-2 px-3 font-semibold text-muted-foreground">ACTION</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {pendingOrders.map(o => (
+                       <tr key={o._id} className="border-b border-border dark:border-border-dark hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                         <td className="py-2 px-3 font-semibold">{o.orderId}</td>
+                          <td className="py-2 px-3">{typeof o.shop === 'string' ? o.shop : o.shop?.name || 'Unknown'}</td>
+                          <td className="py-2 px-3">{o.items} items</td>
+                          <td className="py-2 px-3">{o.date ? new Date(o.date).toLocaleDateString() : 'Unknown Date'}</td>
+                         <td className="py-2 px-3">
+                           {(role === 'admin' || role === 'supplier') && (
+                             <Button size="xs" variant="outline" onClick={() => {
+                               setForm(prev => ({ ...prev, orders: [o._id] }));
+                               setShowModal(true);
+                             }}>Dispatch Now</Button>
+                           )}
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          )}
+
+          <div>
+            <Typography variant="h3" className="m-0 mb-3 text-foreground block">Active Routes</Typography>
+            <DataGrid 
+              columns={routeColumns}
+              data={dispatches}
+              emptyMessage="No dispatch routes found. Create a route to assign pending orders to a vehicle."
+            />
+          </div>
         </div>
       )}
 
-      {activeTab === 'fleet' && (
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 300 }}>
-                  <div style={{ background: C.card, padding: 20, borderRadius: 12, border: `1px solid ${C.border}` }}>
-                      <h3 style={{ margin: '0 0 16px 0', fontSize: 16 }}>Add Vehicle</h3>
-                      <form onSubmit={handleAddVehicle} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <input type="text" placeholder="Plate Number (e.g. LHR-1234)" value={vehForm.plateNumber} onChange={e => setVehForm({...vehForm, plateNumber: e.target.value})} required style={{ padding: 10, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text }} />
-                          <input type="text" placeholder="Model (e.g. Hino Ranger)" value={vehForm.model} onChange={e => setVehForm({...vehForm, model: e.target.value})} required style={{ padding: 10, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text }} />
-                          <input type="number" placeholder="Capacity (units)" value={vehForm.capacity} onChange={e => setVehForm({...vehForm, capacity: e.target.value})} required style={{ padding: 10, borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text }} />
-                          <button type="submit" style={{ padding: 10, background: C.gold, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Add Vehicle</button>
-                      </form>
-                  </div>
-              </div>
-              <div style={{ flex: 2, minWidth: 400 }}>
-                  <div className="table-responsive-container" style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <THead cols={['Plate', 'Model', 'Capacity', 'Status']} />
-                        <tbody>
-                            {vehicles.length === 0 ? (
-                              <tr><td colSpan={4} style={{ padding: 0 }}><EmptyState title="No Vehicles" message="No vehicles found in fleet." icon="🚛" /></td></tr>
-                            ) : vehicles.map(v => (
-                                <TRow key={v._id}>
-                                    <TCell bold>{v.plateNumber}</TCell>
-                                    <TCell>{v.model}</TCell>
-                                    <TCell>{v.capacity} Units</TCell>
-                                    <TCell><Badge s={v.status} /></TCell>
-                                </TRow>
-                            ))}
-                        </tbody>
-                    </table>
-                  </div>
+      {activeTab === 'vehicles' && (
+          <div className="flex gap-6 flex-wrap h-full">
+              {(role === 'admin' || role === 'supplier') && (
+                <div className="flex-1 min-w-[300px]">
+                    <div className="bg-card p-5 rounded-xl border border-border dark:border-border-dark">
+                        <Typography variant="h3" className="m-0 mb-4 block text-foreground">Add Vehicle</Typography>
+                        <form onSubmit={handleVehicleSubmit(handleAddVehicle)} className="flex flex-col gap-3">
+                            <Input placeholder="Plate Number (e.g. LHR-1234)" required {...registerVehicle('plateNumber')} error={vehicleErrors.plateNumber} />
+                            <Input placeholder="Model (e.g. Hino Ranger)" required {...registerVehicle('model')} error={vehicleErrors.model} />
+                            <Input type="number" placeholder="Capacity (units)" required {...registerVehicle('capacity', { valueAsNumber: true })} error={vehicleErrors.capacity} />
+                            <Button type="submit" isLoading={savingVehicle}>Add Vehicle</Button>
+                        </form>
+                    </div>
+                </div>
+              )}
+              <div className="flex-[2] min-w-[400px] min-h-[400px]">
+                  <DataGrid 
+                    columns={fleetColumns}
+                    data={vehicles}
+                    emptyMessage="No vehicles found."
+                  />
               </div>
           </div>
       )}
 
-      {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
-          <div style={{ background: C.card, borderRadius: 16, width: '100%', maxWidth: 800, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding: 20, borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, color: C.text, fontSize: 18 }}>Create Dispatch Route</h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', fontSize: 24, color: C.muted, cursor: 'pointer' }}>&times;</button>
+      <EnterpriseModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Create Dispatch Route"
+        size="lg"
+      >
+        <form onSubmit={handleCreateRoute} className="flex flex-col flex-1 overflow-hidden min-h-[500px]">
+            <div className="overflow-y-auto flex gap-6 max-md:flex-col">
+                
+                <div className="flex-1 flex flex-col gap-4">
+                    <Select label="Assign Vehicle" required value={form.vehicle} onChange={e => setForm({...form, vehicle: e.target.value})}>
+                        <option value="">-- Select --</option>
+                        {vehicles.filter(v => v.status === 'active').map(v => <option key={v._id} value={v._id}>{v.plateNumber} - {v.model}</option>)}
+                    </Select>
+                    
+
+                    
+                    <Input label="Route Notes" placeholder="Optional notes..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
+                    
+                    <div className="p-4 bg-info/10 border border-info/30 rounded-lg text-sm text-foreground">
+                        <strong>Selected Orders: {form.orders.length}</strong>
+                        <p className="m-0 mt-1 text-muted-foreground text-xs">When this route completes, all selected orders will be automatically marked as Delivered.</p>
+                    </div>
+                </div>
+
+                <div className="flex-[1.5] flex flex-col border-l border-border dark:border-border-dark pl-6 max-md:border-l-0 max-md:border-t max-md:pl-0 max-md:pt-6">
+                    <Typography variant="caption" className="text-muted-foreground uppercase font-bold block mb-3">Pending Orders to Route</Typography>
+                    <div className="flex flex-col gap-2.5 max-h-[400px] overflow-y-auto pr-2">
+                        {pendingOrders.length === 0 ? <div className="text-sm text-muted-foreground">No pending orders available.</div> : null}
+                        
+                        {pendingOrders.map(o => {
+                          const orderRef = o._id;
+                          return (
+                            <div key={orderRef || o.id} onClick={() => handleOrderToggle(orderRef)} className={`p-3 border rounded-lg cursor-pointer flex justify-between items-center transition-colors ${form.orders.includes(orderRef) ? 'border-gold bg-gold/10' : 'border-border dark:border-border-dark bg-bg hover:bg-card'}`}>
+                                <div>
+                                    <div className="font-semibold text-sm text-foreground">{o.id || o.orderId} - {typeof o.shop === 'string' ? o.shop : o.shop?.name}</div>
+                                    <div className="text-xs text-muted-foreground">{o.items} items • <LocationDisplay loc={typeof o.shop === 'object' ? (o.shop?.loc || o.shop?.location) : null} /></div>
+                                </div>
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${form.orders.includes(orderRef) ? 'border-gold bg-gold text-white' : 'border-muted bg-transparent'}`}>
+                                    {form.orders.includes(orderRef) && <span className="text-sm">✓</span>}
+                                </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                </div>
+
             </div>
             
-            <form onSubmit={handleCreateRoute} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                <div style={{ padding: 20, overflowY: 'auto', display: 'flex', gap: 24 }}>
-                    
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div>
-                            <label style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 6 }}>Assign Vehicle</label>
-                            <select required value={form.vehicle} onChange={e => setForm({...form, vehicle: e.target.value})} style={{ width: '100%', padding: '10px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }}>
-                                <option value="">-- Select --</option>
-                                {vehicles.filter(v => v.status === 'active').map(v => <option key={v._id} value={v._id}>{v.plateNumber} - {v.model}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 6 }}>Assign Driver (Salesman)</label>
-                            <select required value={form.driver} onChange={e => setForm({...form, driver: e.target.value})} style={{ width: '100%', padding: '10px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }}>
-                                <option value="">-- Select --</option>
-                                {salesmen.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 6 }}>Route Notes</label>
-                            <input type="text" placeholder="Optional notes..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }} />
-                        </div>
-                        
-                        <div style={{ padding: 16, background: `${C.info}11`, border: `1px solid ${C.info}44`, borderRadius: 8, fontSize: 13, color: C.text }}>
-                            <strong>Selected Orders: {form.orders.length}</strong>
-                            <p style={{ margin: '4px 0 0 0', color: C.muted }}>When this route completes, all selected orders will be automatically marked as Delivered.</p>
-                        </div>
-                    </div>
+            <div className="mt-6 pt-4 border-t border-border dark:border-border-dark flex justify-end gap-3 bg-bg/50">
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving || form.orders.length === 0} isLoading={saving}>
+                {saving ? 'Saving...' : 'Create Dispatch Route'}
+              </Button>
+            </div>
+        </form>
+      </EnterpriseModal>
 
-                    <div style={{ flex: 1.5, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${C.border}`, paddingLeft: 24 }}>
-                        <label style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 12 }}>Pending Orders to Route</label>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto', paddingRight: 8 }}>
-                            {pendingOrders.length === 0 ? <div style={{ fontSize: 13, color: C.muted }}>No pending orders available.</div> : null}
-                            
-                            {pendingOrders.map(o => (
-                                <div key={o.id} onClick={() => handleOrderToggle(o.id || o._id)} style={{ padding: 12, border: `1px solid ${form.orders.includes(o.id || o._id) ? C.gold : C.border}`, background: form.orders.includes(o.id || o._id) ? `${C.gold}11` : C.bg, borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>{o.orderId} - {o.shop?.name}</div>
-                                        <div style={{ fontSize: 12, color: C.muted }}>{o.items} items • {o.shop?.loc || 'No location'}</div>
-                                    </div>
-                                    <div style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${form.orders.includes(o.id || o._id) ? C.gold : C.muted}`, background: form.orders.includes(o.id || o._id) ? C.gold : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        {form.orders.includes(o.id || o._id) && <span style={{ color: '#fff', fontSize: 14 }}>✓</span>}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                </div>
-                
-                <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end', gap: 12, background: `${C.bg}55` }}>
-                  <button type="button" onClick={() => setShowModal(false)} style={{ padding: '10px 20px', background: 'transparent', color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
-                  <button type="submit" disabled={saving || form.orders.length === 0} style={{ padding: '10px 20px', background: C.gold, color: '#fff', border: 'none', borderRadius: 8, cursor: saving || form.orders.length === 0 ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: saving || form.orders.length === 0 ? 0.7 : 1 }}>
-                    {saving ? 'Saving...' : 'Create Dispatch Route'}
-                  </button>
-                </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <ConfirmDialog 
+      <ConfirmationDialog 
         isOpen={confirmState.isOpen}
         title={"Depart Dispatch"}
         message={"Mark this dispatch as IN-TRANSIT (Departed)?"}
         onConfirm={executeConfirmAction}
-        onCancel={() => setConfirmState({ isOpen: false, type: null, id: null })}
+        onClose={() => setConfirmState({ isOpen: false, type: null, id: null })}
         confirmText={"Depart"}
         isDanger={false}
       />
 
-      {loadInventoryDispatch && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 20 }}>
-          <div style={{ background: C.card, borderRadius: 16, width: '100%', maxWidth: 500, padding: 24 }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: 20 }}>Load Inventory Checklist</h2>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 20 }}>Please verify the following aggregated inventory is loaded into the vehicle <strong>{loadInventoryDispatch.vehicle?.plateNumber}</strong> before departing.</p>
-            
-            <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead style={{ background: C.bg }}>
-                  <tr>
-                    <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: `1px solid ${C.border}` }}>Item Details (Orders)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadInventoryDispatch.orders?.map(o => (
-                    <tr key={o._id || o.id}>
-                      <td style={{ padding: '12px', borderBottom: `1px solid ${C.border}` }}>
-                        <div style={{ fontWeight: 600 }}>{o.orderId} - {o.shop?.name}</div>
-                        <div style={{ color: C.muted, marginTop: 4 }}>{o.items} total units assigned.</div>
-                      </td>
-                    </tr>
-                  ))}
-                  {(!loadInventoryDispatch.orders || loadInventoryDispatch.orders.length === 0) && (
-                    <tr><td style={{ padding: 12, textAlign: 'center', color: C.muted }}>No orders found</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={() => setLoadInventoryDispatch(null)} style={{ flex: 1, padding: 12, background: 'transparent', border: `1px solid ${C.border}`, color: C.text, borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
-              <button onClick={() => {
-                const idToStart = loadInventoryDispatch._id;
-                setLoadInventoryDispatch(null);
-                setConfirmState({ isOpen: true, type: 'start', id: idToStart });
-              }} style={{ flex: 2, padding: 12, background: C.gold, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
-                Acknowledge & Depart
-              </button>
-            </div>
-          </div>
+      <EnterpriseModal
+        isOpen={!!loadInventoryDispatch}
+        onClose={() => setLoadInventoryDispatch(null)}
+        title="Load Inventory Checklist"
+        size="md"
+      >
+        <Typography variant="body" className="text-muted-foreground mb-5 block">
+            Please verify the following aggregated inventory is loaded into the vehicle <strong>{loadInventoryDispatch?.vehicle?.plateNumber}</strong> before departing.
+        </Typography>
+        
+        <div className="max-h-[300px] overflow-y-auto mb-5 border border-border dark:border-border-dark rounded-lg">
+          <table className="w-full border-collapse text-[13px]">
+            <thead className="bg-bg">
+              <tr>
+                <th className="text-left p-2.5 border-b border-border dark:border-border-dark font-semibold text-foreground">Item Details (Orders)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadInventoryDispatch?.orders?.map(o => (
+                <tr key={o._id || o.id}>
+                  <td className="p-3 border-b border-border dark:border-border-dark">
+                    <div className="font-semibold text-foreground">{o.orderId || o.id} - {typeof o.shop === 'object' ? o.shop?.name : o.shop}</div>
+                    <div className="text-muted-foreground mt-1">
+                      {o.lineItems && o.lineItems.length > 0 
+                        ? o.lineItems.map(li => `${li.quantity}x ${li.productName}`).join(' • ') 
+                        : `${o.items} total units assigned.`}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {(!loadInventoryDispatch?.orders || loadInventoryDispatch.orders.length === 0) && (
+                <tr><td className="p-3 text-center text-muted-foreground">No orders found</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setLoadInventoryDispatch(null)} className="flex-1">Cancel</Button>
+          <Button onClick={() => {
+            const idToStart = loadInventoryDispatch._id;
+            setLoadInventoryDispatch(null);
+            setConfirmState({ isOpen: true, type: 'start', id: idToStart });
+          }} className="flex-[2]">
+            Acknowledge & Depart
+          </Button>
+        </div>
+      </EnterpriseModal>
 
       {podDispatch && (
         <PoDModal 

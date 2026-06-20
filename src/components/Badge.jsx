@@ -4,7 +4,7 @@ import { BADGE_COLORS } from '../theme';
 export default function Badge({ s }) {
   const st = BADGE_COLORS[s] || BADGE_COLORS.pending;
   return (
-    <span style={{
+    <span style={ {
       background: st.bg,
       color: st.c,
       padding: '3px 10px',

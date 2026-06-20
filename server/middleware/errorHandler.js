@@ -46,22 +46,48 @@ export function errorHandler(err, req, res, next) {
     error = AppError.internal('Something went wrong. Please try again later.');
   }
 
-  // 3. Construct and send response
-  const response = {
-    success: false,
-    error: {
-      message: error.message,
-      code: error.code || 'UNKNOWN_ERROR',
-      details: err.details || [],
-    }
-  };
-
-  // Only expose stack trace in non-production mode
-  if (process.env.NODE_ENV !== 'production') {
-    response.error.stack = err.stack;
+  // 3. Ensure security middleware returns consistent responses
+  if (error.statusCode === 401 || err.name === 'UnauthorizedError' || err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      status: 'fail',
+      message: 'Authentication required'
+    });
   }
 
-  res.status(error.statusCode || 500).json(response);
+  if (error.statusCode === 403) {
+    return res.status(403).json({
+      status: 'fail',
+      message: 'Access denied'
+    });
+  }
+
+  if (error.statusCode === 404) {
+    return res.status(404).json({
+      status: 'fail',
+      message: 'Resource not found'
+    });
+  }
+
+  if (error.statusCode === 400 || error.statusCode === 422 || error.statusCode === 409) {
+    return res.status(400).json({
+      status: 'fail',
+      message: 'Invalid request'
+    });
+  }
+
+  if (error.statusCode === 429) {
+    return res.status(429).json({
+      status: 'error',
+      message: 'Too many requests. Please try again later.'
+    });
+  }
+
+  // 4. Construct and send standard 500 response
+  // We explicitly log full details above, but NEVER expose them to the client
+  res.status(500).json({
+    status: 'error',
+    message: 'An unexpected server error occurred'
+  });
 }
 
 export default errorHandler;

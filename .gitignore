@@ -31,3 +31,10 @@ server/test_*
 Dockerfile
 docker-compose.yml
 .dockerignore
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

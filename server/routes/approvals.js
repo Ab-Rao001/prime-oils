@@ -2,7 +2,7 @@ import { Router } from 'express';
 import ApprovalRequest from '../models/ApprovalRequest.js';
 import Order from '../models/Order.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import AuditService from '../services/AuditService.js';
@@ -11,7 +11,7 @@ import { runInTransaction } from '../utils/transaction.js';
 const router = Router();
 
 router.use(authenticate);
-router.use(authorize('admin')); // Only admins can handle approvals
+router.use(requirePermission('admin')); // Only admins can handle approvals
 
 // GET all approval requests
 router.get('/', catchAsync(async (req, res) => {
@@ -39,11 +39,14 @@ router.post('/:id/resolve', catchAsync(async (req, res) => {
   const result = await runInTransaction(async (session) => {
     const approvalReq = await ApprovalRequest.findOneAndUpdate(
       { _id: req.params.id, status: 'pending' },
-      { status, comments: comments || '', approver: req.user.id, resolvedAt: new Date() },
+      { 
+        $set: { status, comments: comments || '', approver: req.user.id, resolvedAt: new Date() },
+        $inc: { __v: 1 }
+      },
       { new: true, session }
     );
 
-    if (!approvalReq) throw AppError.validation(`Approval request is no longer pending or does not exist`);
+    if (!approvalReq) throw AppError.conflict(`Approval request is no longer pending or does not exist`);
 
     // Handle Order Workflow Unblocking
     if (approvalReq.collectionName === 'Order') {
@@ -64,6 +67,22 @@ router.post('/:id/resolve', catchAsync(async (req, res) => {
       }
 
       if (order.status === 'pending_approval') {
+        const targetStatus = status === 'approved' ? 'pending' : 'cancelled';
+        
+        // Use OCC to update the Order Status safely
+        const updatedOrder = await Order.findOneAndUpdate(
+          { _id: order._id, status: 'pending_approval', __v: order.__v },
+          { 
+            $set: { status: targetStatus },
+            $inc: { __v: 1 }
+          },
+          { session, new: true }
+        );
+
+        if (!updatedOrder) {
+          throw AppError.conflict('Order was updated concurrently or is no longer pending approval');
+        }
+
         if (status === 'approved') {
           // Deduct stock now!
           const { default: StockService } = await import('../services/StockService.js');
@@ -77,12 +96,7 @@ router.post('/:id/resolve', catchAsync(async (req, res) => {
               session
             });
           }
-          order.status = 'pending';
-        } else {
-          // Rejected, order is cancelled. Stock was never deducted, so no need to return.
-          order.status = 'cancelled';
         }
-        await order.save({ session });
 
         await AuditService.log({
           user: req.user.id,
@@ -90,7 +104,7 @@ router.post('/:id/resolve', catchAsync(async (req, res) => {
           collectionName: 'Order',
           documentId: order._id,
           oldValue: { status: 'pending_approval' },
-          newValue: { status: order.status },
+          newValue: { status: targetStatus },
           session
         });
       }

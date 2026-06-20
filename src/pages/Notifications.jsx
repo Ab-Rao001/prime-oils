@@ -39,20 +39,20 @@ export default function Notifications({ role, user, notifications = [], setNotif
 
   return (
     <div className="page-enter">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+      <div style={ { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>Notifications</h2>
-          <p style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{unread} unread</p>
+          <h2 style={ { fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>Notifications</h2>
+          <p style={ { color: C.muted, fontSize: 12, marginTop: 2 }}>{unread} unread</p>
         </div>
         <button
           onClick={markAll}
-          style={{ padding: '7px 14px', background: C.goldBg, border: `1px solid ${C.goldBorder}`, borderRadius: 8, color: C.gold, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+          style={ { padding: '7px 14px', background: C.goldBg, border: `1px solid ${C.goldBorder}`, borderRadius: 8, color: C.gold, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
         >
           Mark all read
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={ { display: 'flex', flexDirection: 'column', gap: 10 }}>
         {visible.map(n => {
           const isRead = n.isRead ?? n.read;
           const msg = n.message || n.msg;
@@ -62,7 +62,7 @@ export default function Notifications({ role, user, notifications = [], setNotif
             <div
               key={n.id || n._id}
               onClick={() => markRead(n.id || n._id)}
-              style={{
+              style={ {
                 background: C.card,
                 border: `1px solid ${isRead ? C.border : (isCritical ? C.danger : C.goldBorder)}`,
                 borderLeft: isCritical ? `4px solid ${C.danger}` : (n.priority === 'HIGH' ? `4px solid ${C.warn}` : undefined),
@@ -72,7 +72,7 @@ export default function Notifications({ role, user, notifications = [], setNotif
                 cursor: 'pointer', transition: 'all 0.2s',
               }}
             >
-              <div style={{
+              <div style={ {
                 width: 36, height: 36, borderRadius: 10,
                 background: `${COLS[n.type] || C.gold}15`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -80,17 +80,17 @@ export default function Notifications({ role, user, notifications = [], setNotif
               }}>
                 {ICONS[n.type] || '🔔'}
               </div>
-              <div style={{ flex: 1 }}>
-                <h4 style={{ margin: '0 0 4px 0', fontSize: 14, color: isCritical ? C.danger : C.text, fontWeight: 700 }}>{title}</h4>
-                <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: isRead ? 400 : 600, lineHeight: 1.5 }}>{msg}</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 11, color: C.muted }}>{n.date || (n.createdAt ? new Date(n.createdAt).toLocaleString() : '')}</span>
+              <div style={ { flex: 1 }}>
+                <h4 style={ { margin: '0 0 4px 0', fontSize: 14, color: isCritical ? C.danger : C.text, fontWeight: 700 }}>{title}</h4>
+                <p style={ { margin: 0, fontSize: 13, color: C.text, fontWeight: isRead ? 400 : 600, lineHeight: 1.5 }}>{msg}</p>
+                <div style={ { display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <span style={ { fontSize: 11, color: C.muted }}>{n.date || (n.createdAt ? new Date(n.createdAt).toLocaleString() : '')}</span>
                   <Badge s={n.type} />
                   {n.priority && <Badge s={n.priority} />}
                 </div>
               </div>
               {!isRead && (
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.gold, marginTop: 4, flexShrink: 0 }} />
+                <div style={ { width: 7, height: 7, borderRadius: '50%', background: C.gold, marginTop: 4, flexShrink: 0 }} />
               )}
             </div>
           );

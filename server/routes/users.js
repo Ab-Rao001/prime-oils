@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import User from '../models/User.js';
+import Shopkeeper from '../models/Shopkeeper.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import validate from '../middleware/validate.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 const isSuperAdminEmail = (email) => {
@@ -14,10 +15,14 @@ import { createUserSchema, updateUserRoleSchema } from '../validators/user.valid
 import { auth, isFirebaseInitialized } from '../config/firebase.js';
 import { handleProductImageUpload } from '../middleware/uploadProductImage.js';
 import { uploadImageBuffer, destroyImage } from '../utils/cloudinaryUpload.js';
+import { getOnlineUsers } from '../utils/socket.js';
+import { cache } from '../utils/cache.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+
 
 router.put('/profile', catchAsync(async (req, res) => {
   const user = await User.findById(req.user.id);
@@ -29,6 +34,36 @@ router.put('/profile', catchAsync(async (req, res) => {
   if (address !== undefined) user.address = address;
 
   await user.save();
+
+  if (user.role === 'shopkeeper') {
+    const shopkeeper = await Shopkeeper.findOne({ 
+      $or: [{ userId: user._id }, { email: user.email }, { owner: user.name }] 
+    });
+    if (shopkeeper) {
+      if (address !== undefined) {
+        shopkeeper.loc = address;
+        // Extract coordinates from formatted address "[lat, lon]" or "lat, lon"
+        const coordMatch = address.match(/\[([\d.-]+),\s*([\d.-]+)\]/);
+        const legacyMatch = address.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+        
+        if (coordMatch) {
+          shopkeeper.location = {
+            type: 'Point',
+            coordinates: [parseFloat(coordMatch[2]), parseFloat(coordMatch[1])] // [lon, lat]
+          };
+        } else if (legacyMatch) {
+          shopkeeper.location = {
+            type: 'Point',
+            coordinates: [parseFloat(legacyMatch[2]), parseFloat(legacyMatch[1])]
+          };
+        }
+      }
+      if (phone !== undefined) shopkeeper.phone = phone;
+      if (name) shopkeeper.owner = name;
+      await shopkeeper.save();
+      await cache.del('shopkeepers:list:*');
+    }
+  }
 
   res.json({ success: true, data: user.toPublic(), message: 'Profile updated' });
 }));
@@ -66,68 +101,53 @@ router.get('/salesmen', catchAsync(async (req, res) => {
   });
 }));
 
-router.use(authorize('admin'));
+router.use(requirePermission('admin'));
 
 router.get('/', catchAsync(async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 50;
+  const { page, limit, skip } = getPagination(req.query);
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'name', 'email', 'role', 'status'], { createdAt: -1 });
 
-  if (req.query.page || req.query.limit) {
-    const paginatedResult = await paginate(User, { isDeleted: { $ne: true } }, {
+  const filter = { isDeleted: { $ne: true } };
+
+  const [docs, total] = await Promise.all([
+    User.find(filter)
+      .select('-password')
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    User.countDocuments(filter)
+  ]);
+
+  const onlineSet = new Set(getOnlineUsers());
+
+  const users = docs.map(u => ({
+    id: u._id.toString(),
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    status: u.active === false ? 'inactive' : u.status,
+    active: u.active !== false,
+    createdAt: u.createdAt,
+    joinedDate: u.createdAt,
+    lastLogin: u.lastLogin,
+    loginHistory: u.loginHistory || [],
+    isSuperAdmin: isSuperAdminEmail(u.email),
+    isOnline: onlineSet.has(u._id.toString()),
+  }));
+
+  res.json({
+    success: true,
+    data: users,
+    pagination: {
       page,
       limit,
-      sort: { createdAt: -1 },
-    });
-    
-    // Remove passwords manually since we can't easily chain select to paginate currently without modifying paginate.js
-    const users = paginatedResult.data.map(u => {
-      const pu = { ...u };
-      delete pu.password;
-      return pu;
-    });
-
-    res.json({
-      success: true,
-      data: {
-        ...paginatedResult,
-        data: users.map(u => ({
-          id: u._id.toString(),
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          status: u.active === false ? 'inactive' : u.status,
-          active: u.active !== false,
-          createdAt: u.createdAt,
-          joinedDate: u.createdAt,
-          lastLogin: u.lastLogin,
-          loginHistory: u.loginHistory || [],
-          isSuperAdmin: isSuperAdminEmail(u.email),
-        })),
-      }
-    });
-  } else {
-    const users = await User.find({ isDeleted: { $ne: true } })
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json({
-      success: true,
-      data: users.map(u => ({
-        id: u._id.toString(),
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        status: u.active === false ? 'inactive' : u.status,
-        active: u.active !== false,
-        createdAt: u.createdAt,
-        joinedDate: u.createdAt,
-        lastLogin: u.lastLogin,
-        loginHistory: u.loginHistory || [],
-        isSuperAdmin: isSuperAdminEmail(u.email),
-      })),
-    });
-  }
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  });
 }));
 
 router.post('/', validate(createUserSchema), catchAsync(async (req, res) => {

@@ -33,12 +33,12 @@ const PRODUCT_IMAGE_MAP = {
 };
 
 const PRODUCTS = [
-  { legacyId: 4, name: 'Canolive Oil 1 Ltr', cat: 'Cooking Oil', size: '1 Ltr', description: 'Sunflower cooking oil — 1 litre bottle', stock: 320, unit: 'Bottle', price: 650, min: 150 },
-  { legacyId: 5, name: 'Canolive Oil 3 Ltr', cat: 'Cooking Oil', size: '3 Ltr', description: 'Premium cooking oil — 3 litre bottle', stock: 45, unit: 'Bottle', price: 1885, min: 50 },
-  { legacyId: 1, name: 'Canolive Oil 4.5 Ltr', cat: 'Cooking Oil', size: '4.5 Ltr', description: 'Sufi cooking oil — 4.5 litre bottle', stock: 450, unit: 'Bottle', price: 2790, min: 100 },
-  { legacyId: 3, name: 'Canolive Oil 5×1 Pouch', cat: 'Cooking Oil', size: '5×1 Pouch', description: 'Canola oil — 5×1 litre pouch carton', stock: 95, unit: 'Carton', price: 3150, min: 100 },
-  { legacyId: 2, name: 'Canolive Oil 5×1 Nozzle', cat: 'Banaspati', size: '5×1 Nozzle', description: 'Dalda banaspati — 5×1 pack with nozzle', stock: 280, unit: 'Pack', price: 3350, min: 80 },
-  { legacyId: 6, name: 'Canolive Oil 16 Ltr', cat: 'Palm Oil', size: '16 Ltr', description: 'Palm oil — 16 litre tin', stock: 180, unit: 'Tin', price: 6280, min: 60 },
+  { legacyId: 4, name: 'Canolive Oil 1 Ltr', cat: 'Cooking Oil', size: '1 Ltr', description: 'Cooking Oil — 1 litre bottle', stock: 320, unit: 'Bottle', price: 650, min: 150 },
+  { legacyId: 5, name: 'Canolive Oil 3 Ltr', cat: 'Cooking Oil', size: '3 Ltr', description: 'Cooking Oil — 3 litre bottle', stock: 45, unit: 'Bottle', price: 1885, min: 50 },
+  { legacyId: 1, name: 'Canolive Oil 4.5 Ltr', cat: 'Cooking Oil', size: '4.5 Ltr', description: 'Cooking Oil — 4.5 litre bottle', stock: 450, unit: 'Bottle', price: 2790, min: 100 },
+  { legacyId: 3, name: 'Canolive Oil 5×1 Pouch', cat: 'Cooking Oil', size: '5×1 Pouch', description: 'Cooking Oil — 5×1 litre pouch carton', stock: 95, unit: 'Carton', price: 3150, min: 100 },
+  { legacyId: 2, name: 'Canolive Oil 5×1 Nozzle', cat: 'Cooking Oil', size: '5×1 Nozzle', description: 'Cooking Oil — 5×1 pack with nozzle', stock: 280, unit: 'Pack', price: 3350, min: 80 },
+  { legacyId: 6, name: 'Canolive Oil 10 Ltr', cat: 'Cooking Oil', size: '10 Ltr', description: 'Cooking Oil — 10 litre can', stock: 180, unit: 'Can', price: 6280, min: 60 },
 ];
 
 const ORDERS = [

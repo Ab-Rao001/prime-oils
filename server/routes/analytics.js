@@ -2,7 +2,7 @@ import { Router } from 'express';
 import Order from '../models/Order.js';
 import Expense from '../models/Expense.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import catchAsync from '../utils/catchAsync.js';
 
 const router = Router();
@@ -10,7 +10,7 @@ const router = Router();
 router.use(authenticate);
 
 // GET /api/analytics/pnl?startDate=...&endDate=...
-router.get('/pnl', authorize('admin'), catchAsync(async (req, res) => {
+router.get('/pnl', requirePermission('reports.read'), catchAsync(async (req, res) => {
   const { startDate, endDate } = req.query;
 
   const matchStage = { isDeleted: { $ne: true } };
@@ -78,29 +78,43 @@ router.get('/pnl', authorize('admin'), catchAsync(async (req, res) => {
 }));
 
 // GET /api/analytics/supplier
-router.get('/supplier', authorize('admin', 'supplier'), catchAsync(async (req, res) => {
-  const [
-    newOrders,
-    pendingReviews,
-    readyForDispatch,
-    deliveriesInProgress,
-    completedDeliveries
-  ] = await Promise.all([
-    Order.countDocuments({ status: { $in: ['pending', 'paid'] }, isDeleted: { $ne: true } }),
-    Order.countDocuments({ status: 'pending_approval', isDeleted: { $ne: true } }),
-    Order.countDocuments({ status: { $in: ['confirmed', 'ready_for_dispatch'] }, isDeleted: { $ne: true } }),
-    Order.countDocuments({ status: 'in_transit', isDeleted: { $ne: true } }),
-    Order.countDocuments({ status: 'delivered', isDeleted: { $ne: true } })
+router.get('/supplier', requirePermission('reports.read'), catchAsync(async (req, res) => {
+  const result = await Order.aggregate([
+    { $match: { isDeleted: { $ne: true } } },
+    {
+      $facet: {
+        newOrders: [
+          { $match: { status: { $in: ['pending', 'paid'] } } },
+          { $count: 'count' }
+        ],
+        pendingReviews: [
+          { $match: { status: 'pending_approval' } },
+          { $count: 'count' }
+        ],
+        readyForDispatch: [
+          { $match: { status: { $in: ['confirmed', 'ready_for_dispatch'] } } },
+          { $count: 'count' }
+        ],
+        deliveriesInProgress: [
+          { $match: { status: 'in_transit' } },
+          { $count: 'count' }
+        ],
+        completedDeliveries: [
+          { $match: { status: 'delivered' } },
+          { $count: 'count' }
+        ]
+      }
+    }
   ]);
 
-  // Low stock alerts logic (assuming Product model exists, but we can return mock or real)
-  // We'll import Product dynamically or at the top
+  const stats = result[0];
+
   res.json({
-    newOrders,
-    pendingReviews,
-    readyForDispatch,
-    deliveriesInProgress,
-    completedDeliveries
+    newOrders: stats.newOrders[0]?.count || 0,
+    pendingReviews: stats.pendingReviews[0]?.count || 0,
+    readyForDispatch: stats.readyForDispatch[0]?.count || 0,
+    deliveriesInProgress: stats.deliveriesInProgress[0]?.count || 0,
+    completedDeliveries: stats.completedDeliveries[0]?.count || 0
   });
 }));
 

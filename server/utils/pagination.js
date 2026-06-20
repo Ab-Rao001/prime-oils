@@ -1,4 +1,60 @@
 /**
+ * Parses and sanitizes pagination parameters from req.query.
+ * @param {Object} query - req.query object
+ * @returns {Object} { page, limit, skip }
+ */
+export function getPagination(query) {
+  let page = parseInt(query.page, 10);
+  let limit = parseInt(query.limit, 10);
+
+  // Reject negative, NaN, or non-numeric strings
+  if (isNaN(page) || page <= 0) page = 1;
+  if (isNaN(limit) || limit <= 0) limit = 25;
+
+  // Hard cap limit
+  limit = Math.min(limit, 100);
+
+  // Calculate skip
+  // Prevent integer overflow / huge values (though Math.min handles limit)
+  if (page > 1000000) page = 1000000; // basic safeguard
+  
+  const skip = (page - 1) * limit;
+
+  return { page, limit, skip };
+}
+
+/**
+ * Validates and sanitizes the sort parameter based on an allowlist.
+ * @param {string} sortParam - The sort query string (e.g., "-totalAmount", "status")
+ * @param {Array<string>} allowedFields - List of allowed sort fields
+ * @param {Object} defaultSort - Default sort object (e.g., { createdAt: -1 })
+ * @returns {Object} Mongoose sort object
+ */
+export function getSafeSort(sortParam, allowedFields = [], defaultSort = { createdAt: -1 }) {
+  if (!sortParam || typeof sortParam !== 'string') return defaultSort;
+  
+  const sortObj = {};
+  const fields = sortParam.split(',');
+  
+  let validFieldsCount = 0;
+  
+  for (const field of fields) {
+    const trimmed = field.trim();
+    if (!trimmed) continue;
+    
+    const isDescending = trimmed.startsWith('-');
+    const cleanField = isDescending ? trimmed.substring(1) : trimmed;
+    
+    if (allowedFields.includes(cleanField)) {
+      sortObj[cleanField] = isDescending ? -1 : 1;
+      validFieldsCount++;
+    }
+  }
+  
+  return validFieldsCount > 0 ? sortObj : defaultSort;
+}
+
+/**
  * Paginates a mongoose query.
  * 
  * @param {import('mongoose').Model} model - Mongoose model to query
@@ -12,9 +68,7 @@
  * @returns {Promise<Object>} Object containing paginated data and page info
  */
 export async function paginate(model, filter = {}, options = {}) {
-  const page = Math.max(1, parseInt(options.page || 1, 10));
-  const limit = Math.max(1, Math.min(100, parseInt(options.limit || 20, 10))); // Cap limit at 100
-  const skip = (page - 1) * limit;
+  const { page, limit, skip } = getPagination({ page: options.page, limit: options.limit });
 
   const query = model.find(filter).skip(skip).limit(limit);
 
@@ -47,10 +101,11 @@ export async function paginate(model, filter = {}, options = {}) {
     pagination: {
       page,
       limit,
-      total,
-      pages: Math.ceil(total / limit),
+      count: total,
+      totalRecords: total,
+      totalPages: Math.ceil(total / limit),
       hasNext: page * limit < total,
-      hasPrev: page > 1,
+      hasPrevious: page > 1,
     },
   };
 }

@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 const shopkeeperSchema = new mongoose.Schema({
   name: { type: String, required: true, index: true },
   owner: { type: String, index: true },
+  email: { type: String, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   loc: String, // Legacy location string
   location: {
     type: { type: String, enum: ['Point'], default: 'Point' },

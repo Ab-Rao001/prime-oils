@@ -78,8 +78,8 @@ export default function ProductImageUpload({
   const displayUrl = previewUrl || (showExisting ? existingImageUrl : null);
 
   return (
-    <div style={{ gridColumn: '1 / -1' }}>
-      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8 }}>
+    <div style={ { gridColumn: '1 / -1' }}>
+      <label style={ { display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8 }}>
         Product Image
       </label>
 
@@ -90,7 +90,7 @@ export default function ProductImageUpload({
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        style={{
+        style={ {
           border: `2px dashed ${error ? C.danger : dragOver ? C.gold : C.border}`,
           borderRadius: 12,
           padding: displayUrl ? 16 : 28,
@@ -100,11 +100,11 @@ export default function ProductImageUpload({
         }}
       >
         {displayUrl ? (
-          <div style={{ position: 'relative', display: 'inline-block' }}>
+          <div style={ { position: 'relative', display: 'inline-block' }}>
             <img
               src={displayUrl}
               alt="Product preview"
-              style={{
+              style={ {
                 maxWidth: '100%',
                 maxHeight: 200,
                 borderRadius: 10,
@@ -123,7 +123,7 @@ export default function ProductImageUpload({
                     onRemoveExisting();
                   }
                 }}
-                style={{
+                style={ {
                   position: 'absolute',
                   top: -8,
                   right: -8,
@@ -146,11 +146,11 @@ export default function ProductImageUpload({
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 32, marginBottom: 8, opacity: 0.5 }}>🖼️</div>
-            <div style={{ fontSize: 13, color: C.text, fontWeight: 600, marginBottom: 4 }}>
+            <div style={ { fontSize: 32, marginBottom: 8, opacity: 0.5 }}>🖼️</div>
+            <div style={ { fontSize: 13, color: C.text, fontWeight: 600, marginBottom: 4 }}>
               Drag and drop an image here
             </div>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>JPEG or PNG, max 5MB</div>
+            <div style={ { fontSize: 12, color: C.muted, marginBottom: 12 }}>JPEG or PNG, max 5MB</div>
           </>
         )}
 
@@ -158,7 +158,7 @@ export default function ProductImageUpload({
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            style={{
+            style={ {
               marginTop: displayUrl ? 12 : 0,
               padding: '8px 18px',
               background: C.goldBg,
@@ -179,21 +179,21 @@ export default function ProductImageUpload({
           type="file"
           accept="image/jpeg,image/png"
           onChange={onInputChange}
-          style={{ display: 'none' }}
+          style={ { display: 'none' }}
           disabled={disabled}
         />
       </div>
 
       {error && (
-        <div style={{ marginTop: 8, fontSize: 12, color: C.danger, fontWeight: 500 }} role="alert">
+        <div style={ { marginTop: 8, fontSize: 12, color: C.danger, fontWeight: 500 }} role="alert">
           {error}
         </div>
       )}
 
       {uploadProgress !== null && uploadProgress >= 0 && (
-        <div style={{ marginTop: 10 }}>
+        <div style={ { marginTop: 10 }}>
           <div
-            style={{
+            style={ {
               display: 'flex',
               justifyContent: 'space-between',
               fontSize: 11,
@@ -205,7 +205,7 @@ export default function ProductImageUpload({
             <span>{uploadProgress}%</span>
           </div>
           <div
-            style={{
+            style={ {
               height: 6,
               borderRadius: 4,
               background: C.border,
@@ -213,7 +213,7 @@ export default function ProductImageUpload({
             }}
           >
             <div
-              style={{
+              style={ {
                 height: '100%',
                 width: `${uploadProgress}%`,
                 background: C.gold,

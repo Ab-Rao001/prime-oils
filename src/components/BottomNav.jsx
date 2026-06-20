@@ -18,7 +18,7 @@ export default function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 w-full bg-[var(--color-card)] border-t border-[var(--color-border)] pb-safe z-50 md:hidden">
+    <nav role="navigation" aria-label="Bottom mobile navigation" className="fixed bottom-0 left-0 w-full bg-[var(--color-card)] border-t border-[var(--color-border)] pb-safe z-50 md:hidden">
       <div className="flex items-center justify-around h-16">
         {links.map((link) => {
           const Icon = link.icon;
@@ -28,10 +28,11 @@ export default function BottomNav() {
               to={link.to}
               end={link.to === '/dashboard'}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center w-full h-full space-y-1 ${
+                `flex flex-col items-center justify-center w-full h-full space-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-gold)] focus-visible:z-10 ${
                   isActive ? 'text-[var(--accent-gold)]' : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
                 }`
               }
+              aria-label={link.label}
             >
               <Icon size={20} />
               <span className="text-[10px] font-medium">{link.label}</span>
@@ -39,6 +40,6 @@ export default function BottomNav() {
           );
         })}
       </div>
-    </div>
+    </nav>
   );
 }

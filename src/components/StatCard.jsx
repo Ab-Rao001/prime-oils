@@ -1,29 +1,30 @@
 import React from 'react';
-import C from '../theme';
+import { Typography } from './ui';
 
-export default function StatCard({ label, value, sub, color = C.gold, icon }) {
+export default function StatCard({ label, value, sub, colorClass = 'text-gold bg-gold/10', icon }) {
+  // If legacy components still pass raw hex colors, map them to tailwind classes roughly
+  const colorMap = {
+    '#34d399': 'text-success bg-success/15', // success
+    '#f87171': 'text-danger bg-danger/15', // danger
+    '#fbbf24': 'text-warn bg-warn/15', // warn
+    '#F5C842': 'text-gold bg-gold/15', // gold
+    '#3b82f6': 'text-info bg-info/15', // info
+  };
+  
+  // Use passed colorClass if it's a tailwind class (doesn't start with #), else map it
+  const finalColorClass = typeof colorClass === 'string' && colorClass.startsWith('#') 
+    ? (colorMap[colorClass] || 'text-gold bg-gold/15') 
+    : colorClass;
+
   return (
-    <div style={{
-      background: C.card,
-      border: `1px solid ${C.border}`,
-      borderRadius: 14,
-      padding: '16px 20px',
-      display: 'flex',
-      gap: 14,
-      alignItems: 'center',
-    }}>
-      <div style={{
-        width: 44, height: 44, borderRadius: 12,
-        background: `${color}18`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0, fontSize: 22,
-      }}>
+    <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4 flex gap-3.5 items-center">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-2xl ${finalColorClass}`}>
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 19, fontWeight: 700, color: C.text }}>{value}</div>
-        {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{sub}</div>}
+        <Typography variant="caption" className="text-muted-foreground mb-0.5 block">{label}</Typography>
+        <Typography variant="h3" size="xl" className="font-bold text-foreground">{value}</Typography>
+        {sub && <Typography variant="caption" className="text-muted-foreground mt-0.5 block">{sub}</Typography>}
       </div>
     </div>
   );

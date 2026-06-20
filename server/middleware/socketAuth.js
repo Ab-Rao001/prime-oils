@@ -5,7 +5,7 @@ import User from '../models/User.js';
 const socketAuth = async (socket, next) => {
   try {
     // We expect the token either in handshake auth or cookies
-    const token = socket.handshake.auth?.token || parseCookie(socket.handshake.headers.cookie, 'token');
+    const token = socket.handshake.auth?.token || parseCookie(socket.handshake.headers.cookie, 'accessToken');
     
     if (!token) {
       return next(new Error('Authentication error: Token missing'));

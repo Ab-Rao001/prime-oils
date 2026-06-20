@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { authApi } from '../api/authApi';
 
 export const AuthContext = createContext();
@@ -27,9 +27,18 @@ export const AuthProvider = ({ children }) => {
       }
     };
     fetchUser();
+
+    const handleForceLogout = () => {
+      localStorage.removeItem('user');
+      setUser(null);
+      setUserRole(null);
+      setError('Session expired. Please log in again.');
+    };
+    window.addEventListener('auth:logout', handleForceLogout);
+    return () => window.removeEventListener('auth:logout', handleForceLogout);
   }, []);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     setError('');
     try {
       const data = await authApi.loginLocal(email, password);
@@ -40,9 +49,9 @@ export const AuthProvider = ({ children }) => {
       setError(err.message || 'Login failed');
       throw err;
     }
-  };
+  }, []);
 
-  const signup = async (name, email, password, confirmPassword, role) => {
+  const signup = useCallback(async (name, email, password, confirmPassword, role) => {
     setError('');
     try {
       const data = await authApi.signupLocal(name, email, password, confirmPassword, role);
@@ -53,9 +62,9 @@ export const AuthProvider = ({ children }) => {
       setError(err.message || 'Signup failed');
       throw err;
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } catch (e) {
@@ -65,10 +74,22 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setUserRole(null);
     setError('');
-  };
+  }, []);
+
+  const value = useMemo(() => ({
+    user,
+    userRole,
+    loading,
+    error,
+    setError,
+    isAuthenticated: !!user,
+    login,
+    signup,
+    logout
+  }), [user, userRole, loading, error, login, signup, logout]);
 
   return (
-    <AuthContext.Provider value={{ user, userRole, loading, error, setError, isAuthenticated: !!user, login, signup, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

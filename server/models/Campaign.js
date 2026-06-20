@@ -8,6 +8,7 @@ const campaignSchema = new mongoose.Schema({
   end: { type: String, index: true },
   status: { type: String, index: true },
   roi: String,
+  expenseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Expense' },
 }, { timestamps: true });
 
 // Define compound indexes for active campaigns

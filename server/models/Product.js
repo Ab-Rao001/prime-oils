@@ -23,6 +23,8 @@ const productSchema = new mongoose.Schema({
 
 // Define indexes for scalability
 productSchema.index({ name: 'text', description: 'text' }); // Full-text search
+productSchema.index({ supplier: 1, cat: 1 });
+productSchema.index({ isActive: 1 });
 productSchema.index({ cat: 1, stock: 1 }); // Compound index for stock by category
 productSchema.index({ isActive: 1, createdAt: -1 }); // Compound index for active recent products
 

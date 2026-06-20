@@ -12,7 +12,7 @@ export default function Button({
   disabled,
   ...props
 }) {
-  const baseStyles = 'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed rounded-md';
+  const baseStyles = 'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed rounded-md min-h-[44px] min-w-[44px]';
   
   const variants = {
     primary: 'bg-[var(--primary-green)] text-white hover:bg-[var(--primary-green-light)] focus:ring-[var(--primary-green)]',
@@ -29,6 +29,7 @@ export default function Button({
 
   return (
     <button
+      type={props.type || "button"}
       className={`
         ${baseStyles}
         ${variants[variant]}
@@ -37,6 +38,8 @@ export default function Button({
         ${className}
       `}
       disabled={disabled || isLoading}
+      aria-busy={isLoading}
+      aria-live="polite"
       {...props}
     >
       {isLoading && (

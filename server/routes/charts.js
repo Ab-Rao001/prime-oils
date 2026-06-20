@@ -4,7 +4,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Payment from '../models/Payment.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import { getChartScope } from '../utils/chartScope.js';
@@ -12,7 +12,7 @@ import { getChartScope } from '../utils/chartScope.js';
 const router = Router();
 
 router.use(authenticate);
-router.use(authorize('admin', 'salesman', 'shopkeeper'));
+router.use(requirePermission('reports.read'));
 
 router.get('/:key', catchAsync(async (req, res) => {
   const { key } = req.params;

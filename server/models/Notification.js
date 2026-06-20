@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
   message: { type: String, required: true },
   type: { 
     type: String, 
-    enum: ['ORDER', 'DELIVERY', 'INVENTORY', 'PAYMENT', 'COMPLAINT', 'SECURITY', 'SYSTEM', 'order', 'delivery', 'inventory', 'payment', 'complaint'], // lowercase added for backwards compatibility during migration
+    enum: ['ORDER', 'DELIVERY', 'INVENTORY', 'PAYMENT', 'COMPLAINT', 'RETURN', 'SECURITY', 'SYSTEM', 'order', 'delivery', 'inventory', 'payment', 'complaint', 'return'], // lowercase added for backwards compatibility during migration
     index: true 
   },
   priority: { 

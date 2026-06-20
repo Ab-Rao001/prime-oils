@@ -1,19 +1,20 @@
 import jwt from 'jsonwebtoken';
 import config from '../config/env.js';
+import crypto from 'crypto';
 import { UnauthorizedError } from './errors.js';
 
-export function generateAccessToken(payload, expiresIn = config.jwtExpire) {
+export function generateAccessToken(payload, expiresIn = '15m') {
   return jwt.sign(payload, config.jwtSecret, { expiresIn });
 }
 
-export function generateRefreshToken(payload, expiresIn = config.refreshTokenExpire) {
-  return jwt.sign(payload, config.jwtSecret, { expiresIn });
+export function generateRefreshTokenString() {
+  return crypto.randomBytes(40).toString('hex');
 }
 
 export function generateTokenPair(payload) {
   return {
     accessToken: generateAccessToken(payload),
-    refreshToken: generateRefreshToken({ id: payload.id }),
+    refreshToken: generateRefreshTokenString(),
   };
 }
 
@@ -37,7 +38,7 @@ export function decodeToken(token) {
 
 export default {
   generateAccessToken,
-  generateRefreshToken,
+  generateRefreshTokenString,
   generateTokenPair,
   verifyToken,
   decodeToken,

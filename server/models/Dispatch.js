@@ -28,5 +28,8 @@ const dispatchSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 dispatchSchema.index({ deliveryStatus: 1, createdAt: -1 });
+dispatchSchema.index({ driver: 1, createdAt: -1 });
+dispatchSchema.index({ vehicle: 1, createdAt: -1 });
+dispatchSchema.index({ deliveredAt: -1 });
 
 export default mongoose.model('Dispatch', dispatchSchema);

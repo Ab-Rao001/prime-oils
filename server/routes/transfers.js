@@ -4,26 +4,50 @@ import StockService from '../services/StockService.js';
 import AuditService from '../services/AuditService.js';
 import Notification from '../models/Notification.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
 import { runInTransaction } from '../utils/transaction.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 
 const router = Router();
 router.use(authenticate);
 
 // Get all transfers
 router.get('/', catchAsync(async (req, res) => {
-  const docs = await WarehouseTransfer.find().sort({ createdAt: -1 })
-    .populate('fromWarehouse', 'name type')
-    .populate('toWarehouse', 'name type')
-    .populate('products.productId', 'name sku')
-    .populate('createdBy approvedBy', 'name email');
-  res.json(docs);
+  const { page, limit, skip } = getPagination(req.query);
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'status'], { createdAt: -1 });
+
+  const filter = {}; // Expand if needed based on roles
+
+  const [docs, total] = await Promise.all([
+    WarehouseTransfer.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .populate('fromWarehouse', 'name type')
+      .populate('toWarehouse', 'name type')
+      .populate('products.productId', 'name sku')
+      .populate('createdBy approvedBy', 'name email')
+      .lean(),
+    WarehouseTransfer.countDocuments(filter)
+  ]);
+
+  res.json({
+    data: docs,
+    pagination: {
+      page,
+      limit,
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  });
 }));
 
 // Create a transfer request
-router.post('/', authorize('admin', 'supplier'), catchAsync(async (req, res) => {
+router.post('/', requirePermission('inventory.write'), catchAsync(async (req, res) => {
   const { fromWarehouse, toWarehouse, products } = req.body;
   if (!products || products.length === 0) throw AppError.validation('Products are required');
 
@@ -51,22 +75,25 @@ router.post('/', authorize('admin', 'supplier'), catchAsync(async (req, res) => 
 }));
 
 // Approve and Dispatch (Deduct from source)
-router.patch('/:id/approve', authorize('admin'), catchAsync(async (req, res) => {
+router.patch('/:id/approve', requirePermission('inventory.write'), catchAsync(async (req, res) => {
   const doc = await runInTransaction(async (session) => {
-    const transfer = await WarehouseTransfer.findById(req.params.id).session(session);
-    if (!transfer) throw AppError.notFound('Transfer not found');
-    if (transfer.status !== 'REQUESTED') throw AppError.validation(`Cannot approve from status ${transfer.status}`);
-
-    transfer.status = 'APPROVED';
-    transfer.approvedBy = req.user.id;
+    // Phase 7: Warehouse Transfer Integrity (OCC)
+    const transfer = await WarehouseTransfer.findOneAndUpdate(
+      { _id: req.params.id, status: 'REQUESTED' },
+      { 
+        $set: { status: 'IN_TRANSIT', approvedBy: req.user.id },
+        $inc: { __v: 1 }
+      },
+      { new: true, session }
+    );
     
-    // Move immediately to IN_TRANSIT
-    transfer.status = 'IN_TRANSIT';
+    if (!transfer) {
+      const existing = await WarehouseTransfer.findById(req.params.id);
+      if (!existing) throw AppError.notFound('Transfer not found');
+      throw AppError.conflict(`Cannot approve from status ${existing.status}`);
+    }
 
-    // Deduct stock from source (Since we only track global stock in Product right now, 
-    // a true multi-warehouse system would deduct from the specific warehouse stock collection.
-    // For this simulation, we'll log it as transfer_out globally, but this is academic).
-    // In a real system: update fromWarehouse stock.
+    // Deduct stock from source 
     for (const p of transfer.products) {
         await StockService.moveStock({
             productId: p.productId,
@@ -77,8 +104,6 @@ router.patch('/:id/approve', authorize('admin'), catchAsync(async (req, res) => 
             session
         });
     }
-
-    await transfer.save({ session });
 
     await AuditService.log({
       user: req.user.id,
@@ -101,15 +126,24 @@ router.patch('/:id/approve', authorize('admin'), catchAsync(async (req, res) => 
 }));
 
 // Receive at destination (Add to destination)
-router.patch('/:id/receive', authorize('admin', 'supplier'), catchAsync(async (req, res) => {
+router.patch('/:id/receive', requirePermission('stock.receive'), catchAsync(async (req, res) => {
   const doc = await runInTransaction(async (session) => {
-    const transfer = await WarehouseTransfer.findById(req.params.id).session(session);
-    if (!transfer) throw AppError.notFound('Transfer not found');
-    if (transfer.status !== 'IN_TRANSIT') throw AppError.validation(`Must be IN_TRANSIT to receive`);
-
-    transfer.status = 'RECEIVED';
-    transfer.completedAt = new Date();
+    // Phase 7: Warehouse Transfer Integrity (OCC)
+    const transfer = await WarehouseTransfer.findOneAndUpdate(
+      { _id: req.params.id, status: 'IN_TRANSIT' },
+      { 
+        $set: { status: 'COMPLETED', completedAt: new Date() },
+        $inc: { __v: 1 }
+      },
+      { new: true, session }
+    );
     
+    if (!transfer) {
+      const existing = await WarehouseTransfer.findById(req.params.id);
+      if (!existing) throw AppError.notFound('Transfer not found');
+      throw AppError.conflict(`Must be IN_TRANSIT to receive, current status: ${existing.status}`);
+    }
+
     // Add stock to destination
     for (const p of transfer.products) {
         await StockService.moveStock({
@@ -121,9 +155,6 @@ router.patch('/:id/receive', authorize('admin', 'supplier'), catchAsync(async (r
             session
         });
     }
-
-    transfer.status = 'COMPLETED';
-    await transfer.save({ session });
 
     await AuditService.log({
       user: req.user.id,

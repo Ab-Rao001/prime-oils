@@ -24,6 +24,9 @@ export default C;
 
 export const BADGE_COLORS = {
   active:       { bg: C.sBg,       c: C.success  },
+  online:       { bg: C.sBg,       c: C.success  },
+  offline:      { bg: '#F3F4F6',   c: '#6B7280'  },
+  suspended:    { bg: C.dBg,       c: C.danger   },
   delivered:    { bg: C.sBg,       c: C.success  },
   resolved:     { bg: C.sBg,       c: C.success  },
   completed:    { bg: C.sBg,       c: C.success  },

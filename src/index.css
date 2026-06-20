@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   /* Brand Tokens (CANOLIVE Theme) */
   --primary-green: #0d2a14;
@@ -49,9 +53,9 @@
   /* Neutral Color Tokens override for Dark Mode */
   --bg-light: #0d2a14;
   --card-bg: #111e14;
-  --text-primary: #fdf6e3;
-  --text-muted: rgba(253,246,227,0.6);
-  --border-light: rgba(255,255,255,0.1);
+  --text-primary: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.75); /* WCAG AA 4.5:1 compliant */
+  --border-light: rgba(255, 255, 255, 0.15);
 
   /* Theme mappings for theme.js (Dark Mode) */
   --color-sb: #0a170d;

@@ -1,3 +1,6 @@
+import { enqueueMutation } from '../utils/db';
+import { useNetworkStore } from '../store/useNetworkStore';
+
 export const API_BASE = process.env.REACT_APP_API_URL || '/api';
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -26,6 +29,31 @@ export function buildUrl(path, params) {
 }
 
 export async function request(path, options = {}, retries = 1) {
+  const method = (options.method || 'GET').toUpperCase();
+  
+  if (!navigator.onLine && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    // Save to offline mutation queue
+    const payload = {
+      url: `${API_BASE}${path}`,
+      method,
+      data: options.body ? JSON.parse(options.body) : {}
+    };
+    await enqueueMutation(`Offline ${method} ${path}`, payload);
+    
+    // Trigger sync status update
+    useNetworkStore.getState().setSyncing(true);
+    // Determine pending count from DB in background
+    import('../utils/db').then(({ getPendingMutations }) => {
+      getPendingMutations().then(mutations => {
+        useNetworkStore.getState().setPendingCount(mutations.length);
+        useNetworkStore.getState().setSyncing(false);
+      });
+    });
+
+    // Return a mock success response for optimistic UI updates
+    return { success: true, _offline: true, message: 'Saved offline. Will sync when connected.' };
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -60,10 +88,12 @@ export async function request(path, options = {}, retries = 1) {
             return request(path, options, retries - 1);
           } else {
             isRefreshing = false;
+            window.dispatchEvent(new CustomEvent('auth:logout'));
             throw new Error('Session expired. Please log in again.');
           }
         } catch (e) {
           isRefreshing = false;
+          window.dispatchEvent(new CustomEvent('auth:logout'));
           throw new Error('Session expired. Please log in again.');
         }
       } else {

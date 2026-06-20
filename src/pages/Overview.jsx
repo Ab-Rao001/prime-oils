@@ -3,10 +3,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import C from '../theme';
 import StatCard from '../components/StatCard';
 import ProductCard from '../components/ProductCard';
-import Badge from '../components/Badge';
+import { Badge, Typography } from '../components/ui';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
-import { THead, TRow, TCell } from '../components/Table';
+import DataGrid from '../components/DataGrid';
 import { PIE_COLORS } from '../config/charts';
 import { sortProductsBySize } from '../config/products';
 import { useFetch } from '../hooks/useFetch';
@@ -28,28 +28,14 @@ export default function Overview({ role, user, onNavigate }) {
   const loading = oLoad || pLoad || cLoad || prLoad;
   const error = oErr;
 
-  const firstName = String(user?.name || '').split(' ')[0].trim();
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-  const myOrders = useMemo(() => {
-    if (role === 'shopkeeper') return orders.filter(o => o.shop === user?.name);
-    if (role === 'salesman') return orders.filter(o => o.man === firstName);
-    return orders;
-  }, [orders, role, user, firstName]);
-
-  const shopsSet = useMemo(() => new Set(myOrders.map(o => o.shop)), [myOrders]);
-
-  const myPayments = useMemo(() => {
-    if (role === 'shopkeeper') return payments.filter(p => p.shop === user?.name);
-    if (role === 'salesman') return payments.filter(p => shopsSet.has(p.shop));
-    return payments;
-  }, [payments, role, user, shopsSet]);
-
-  const myComplaints = useMemo(() => {
-    if (role === 'shopkeeper') return complaints.filter(c => c.shop === user?.name);
-    if (role === 'admin') return complaints;
-    return [];
-  }, [complaints, role, user]);
+  // NOTE: The backend API already scopes orders/payments/complaints per role.
+  // No client-side filtering needed — using the data directly avoids
+  // broken comparisons between shop display names and usernames.
+  const myOrders = useMemo(() => orders, [orders]);
+  const myPayments = useMemo(() => payments, [payments]);
+  const myComplaints = useMemo(() => complaints, [complaints]);
 
   const catalogProducts = useMemo(() => sortProductsBySize(products), [products]);
   const activeShops = shopkeepers.filter(s => s.status === 'active').length;
@@ -57,59 +43,79 @@ export default function Overview({ role, user, onNavigate }) {
   const totalOrders = myOrders.length;
   const processingOrders = myOrders.filter(o => o.status === 'processing').length;
   const revenuePaid = myPayments.reduce((a, p) => a + (p.paid || 0), 0);
+  
+  const todayDateString = new Date().toISOString().slice(0, 10);
+  const dailyCollection = myPayments
+      .filter(p => p.updatedAt?.startsWith(todayDateString) && p.paid > 0)
+      .reduce((a, p) => a + (p.paid || 0), 0);
+
   const revenuePending = myPayments.reduce((a, p) => a + Math.max(0, (p.total || 0) - (p.paid || 0)), 0);
   const lowStockCount = products.filter(p => p.stock < p.min).length;
   const openComplaints = myComplaints.filter(c => c.status === 'pending' || c.status === 'processing').length;
   const fmtK = n => `PKR ${(n / 1000).toFixed(0)}K`;
+
+  const recentOrdersColumns = useMemo(() => [
+    { header: 'Order ID', accessorKey: 'id', cell: (o) => <Typography variant="body" weight="semibold">{o.id}</Typography> },
+    { header: 'Shopkeeper', accessorKey: 'shop' },
+    { header: 'Total', accessorKey: 'total', cell: (o) => <Typography variant="body" weight="semibold">PKR {(o.total || 0).toLocaleString()}</Typography> },
+    { header: 'Status', accessorKey: 'status', cell: (o) => <Badge variant={['pending', 'pending_approval'].includes(o.status) ? 'warning' : o.status === 'delivered' ? 'success' : o.status === 'cancelled' ? 'danger' : 'default'}>{o.status}</Badge> },
+    { header: 'Date', accessorKey: 'date' }
+  ], []);
 
   if (loading) return <PageLoader label="Loading dashboard..." />;
 
   return (
     <div className="page-enter">
       <ApiError error={error} />
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 21, fontWeight: 700, color: C.text, margin: 0 }}>Dashboard Overview</h1>
-        <p style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>Welcome back — {today}</p>
+      <div className="mb-5">
+        <Typography variant="h1" className="m-0 text-foreground">Dashboard Overview</Typography>
+        <Typography variant="body" className="text-muted-foreground mt-1 text-[13px]">Welcome back — {today}</Typography>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <div style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('orders')}>
-          <StatCard icon="🛒" label="Total Orders" value={String(totalOrders)} sub={`${processingOrders} processing`} />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3 mb-5">
+        <div className="cursor-pointer" onClick={() => onNavigate?.('orders')}>
+          <StatCard icon="🛒" label="Total Orders" value={String(totalOrders)} sub={`${processingOrders} processing`} colorClass="text-gold bg-gold/15" />
         </div>
 
         {(role === 'admin' || role === 'salesman' || role === 'shopkeeper') && (
-          <div style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(role === 'admin' ? 'cashflow' : 'payments')}>
-            <StatCard icon="💰" label="Revenue (Collected)" value={fmtK(revenuePaid)} sub={`${myPayments.length} accounts`} color={C.success} />
+          <div className="cursor-pointer" onClick={() => onNavigate?.(role === 'admin' ? 'cashflow' : 'payments')}>
+            <StatCard icon="💰" label={role === 'shopkeeper' ? 'Total Paid' : 'Revenue (Collected)'} value={fmtK(revenuePaid)} sub={role === 'shopkeeper' ? `${myPayments.length} payments` : `${myPayments.length} accounts`} colorClass="text-success bg-success/15" />
           </div>
         )}
 
-        <div style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('payments')}>
-          <StatCard icon="⏳" label="Pending Payments" value={fmtK(revenuePending)} color={C.warn} />
+        {role === 'salesman' && (
+          <div className="cursor-pointer" onClick={() => onNavigate?.('payments')}>
+            <StatCard icon="📅" label="Daily Collection" value={fmtK(dailyCollection)} colorClass="text-info bg-info/15" />
+          </div>
+        )}
+
+        <div className="cursor-pointer" onClick={() => onNavigate?.('payments')}>
+          <StatCard icon="⏳" label={role === 'salesman' ? "Amount Due in Market" : "Pending Payments"} value={fmtK(revenuePending)} colorClass="text-warn bg-warn/15" />
         </div>
 
         {role !== 'shopkeeper' && (
-          <div style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('inventory')}>
-            <StatCard icon="📦" label="Products" value={`${products.length} items`} sub={`${lowStockCount} low stock`} color={C.info} />
+          <div className="cursor-pointer" onClick={() => onNavigate?.('inventory')}>
+            <StatCard icon="📦" label="Products" value={`${products.length} items`} sub={`${lowStockCount} low stock`} colorClass="text-info bg-info/15" />
           </div>
         )}
 
         {role === 'admin' && (
-          <div style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('shopkeepers')}>
-            <StatCard icon="👥" label="Active Shopkeepers" value={`${activeShops} / ${shopkeepers.length}`} color={C.gold} />
+          <div className="cursor-pointer" onClick={() => onNavigate?.('shopkeepers')}>
+            <StatCard icon="👥" label="Active Shopkeepers" value={`${activeShops} / ${shopkeepers.length}`} colorClass="text-gold bg-gold/15" />
           </div>
         )}
 
         {(role === 'admin' || role === 'shopkeeper') && (
-          <div style={{ cursor: 'pointer' }} onClick={() => onNavigate?.('complaints')}>
-            <StatCard icon="⚠️" label="Open Complaints" value={String(openComplaints)} color={C.danger} />
+          <div className="cursor-pointer" onClick={() => onNavigate?.('complaints')}>
+            <StatCard icon="⚠️" label="Open Complaints" value={String(openComplaints)} colorClass="text-danger bg-danger/15" />
           </div>
         )}
       </div>
 
       {role === 'admin' && salesChart.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 14, marginBottom: 14 }}>
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>Sales vs Target (PKR 000s)</div>
+        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-3.5 mb-3.5 max-lg:grid-cols-1">
+          <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+            <Typography variant="body" weight="semibold" className="mb-3.5 block text-foreground">Sales vs Target (PKR 000s)</Typography>
             <ResponsiveContainer width="100%" height={190}>
               <BarChart data={salesChart} barGap={3}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
@@ -123,8 +129,8 @@ export default function Overview({ role, user, onNavigate }) {
           </div>
 
           {categoryChart.length > 0 && (
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 14 }}>Sales by Category</div>
+            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+              <Typography variant="body" weight="semibold" className="mb-3.5 block text-foreground">Sales by Category</Typography>
               <ResponsiveContainer width="100%" height={140}>
                 <PieChart>
                   <Pie data={categoryChart} dataKey="v" nameKey="name" cx="50%" cy="50%" outerRadius={65} paddingAngle={3}>
@@ -139,9 +145,9 @@ export default function Overview({ role, user, onNavigate }) {
       )}
 
       {catalogProducts.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Product catalog &amp; prices</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+        <div className="mb-4.5">
+          <Typography variant="body" weight="semibold" className="mb-3 block text-foreground">Product catalog &amp; prices</Typography>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {catalogProducts.map(p => (
               <ProductCard key={p._id || p.id} product={p} showStock={role !== 'shopkeeper'} />
             ))}
@@ -149,26 +155,15 @@ export default function Overview({ role, user, onNavigate }) {
         </div>
       )}
 
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 14, fontWeight: 600, color: C.text }}>
+      <div className="bg-card border border-border dark:border-border-dark rounded-xl overflow-hidden">
+        <div className="py-3.5 px-4.5 border-b border-border dark:border-border-dark text-sm font-semibold text-foreground">
           Recent Orders
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
-            <THead cols={['Order ID', 'Shopkeeper', 'Total', 'Status', 'Date']} />
-            <tbody>
-              {myOrders.slice(0, 4).map(o => (
-                <TRow key={o.id}>
-                  <TCell bold>{o.id}</TCell>
-                  <TCell>{o.shop}</TCell>
-                  <TCell bold>PKR {(o.total || 0).toLocaleString()}</TCell>
-                  <TCell><Badge s={o.status} /></TCell>
-                  <TCell>{o.date}</TCell>
-                </TRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid 
+          columns={recentOrdersColumns}
+          data={myOrders.slice(0, 4)}
+          selectable={false}
+        />
       </div>
     </div>
   );

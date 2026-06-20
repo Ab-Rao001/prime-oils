@@ -22,5 +22,6 @@ const stockMovementSchema = new mongoose.Schema({
 stockMovementSchema.index({ product: 1, timestamp: -1 });
 stockMovementSchema.index({ warehouse: 1, timestamp: -1 });
 stockMovementSchema.index({ movementType: 1, timestamp: -1 });
+stockMovementSchema.index({ referenceDocument: 1 });
 
 export default mongoose.model('StockMovement', stockMovementSchema);

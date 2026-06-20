@@ -3,10 +3,10 @@ import Shopkeeper from '../models/Shopkeeper.js';
 import Order from '../models/Order.js';
 import User from '../models/User.js';
 import { formatShopkeeper } from '../utils/format.js';
-import { paginate } from '../utils/pagination.js';
+import { getPagination, getSafeSort } from '../utils/pagination.js';
 import { cache } from '../utils/cache.js';
 import authenticate from '../middleware/auth.js';
-import authorize from '../middleware/authorize.js';
+import { requirePermission } from '../utils/permissions.js';
 import validate from '../middleware/validate.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/AppError.js';
@@ -33,13 +33,13 @@ async function buildShopkeeperListFilter(user) {
   return filter;
 }
 
-router.get('/', authorize('admin', 'salesman', 'shopkeeper'), catchAsync(async (req, res) => {
-  const page = req.query.page ? parseInt(req.query.page, 10) : null;
-  const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+router.get('/', requirePermission('customers.read'), catchAsync(async (req, res) => {
+  const { page, limit, skip } = getPagination(req.query);
   const { lat, lng, maxDistance } = req.query;
+  const sort = getSafeSort(req.query.sort, ['createdAt', 'name', 'credit', 'creditLimit', 'owner', 'loc'], (lat && lng) ? {} : { createdAt: -1 });
 
   const roleFilter = await buildShopkeeperListFilter(req.user);
-  const cacheKey = `shopkeepers:list:role:${req.user.role}:user:${req.user.id}:page:${page || 'all'}:limit:${limit || 'all'}:lat:${lat || ''}:lng:${lng || ''}`;
+  const cacheKey = `shopkeepers:list:role:${req.user.role}:user:${req.user.id}:page:${page}:limit:${limit}:lat:${lat || ''}:lng:${lng || ''}:sort:${JSON.stringify(sort)}`;
   const cachedData = await cache.get(cacheKey);
   if (cachedData) {
     return res.json(cachedData);
@@ -59,30 +59,32 @@ router.get('/', authorize('admin', 'salesman', 'shopkeeper'), catchAsync(async (
     };
   }
 
-  let responseData;
+  const [docs, total] = await Promise.all([
+    Shopkeeper.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Shopkeeper.countDocuments(filter)
+  ]);
 
-  if (page || limit) {
-    const paginatedResult = await paginate(Shopkeeper, filter, {
+  const responseData = {
+    data: docs.map(formatShopkeeper),
+    pagination: {
       page,
       limit,
-      sort: lat && lng ? null : { createdAt: -1 },
-    });
-    responseData = {
-      data: paginatedResult.data.map(formatShopkeeper),
-      pagination: paginatedResult.pagination,
-    };
-  } else {
-    const docs = await Shopkeeper.find(filter)
-      .sort(lat && lng ? {} : { createdAt: -1 })
-      .lean();
-    responseData = docs.map(formatShopkeeper);
-  }
+      count: total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrevious: page > 1,
+    }
+  };
 
   await cache.set(cacheKey, responseData, 120);
   res.json(responseData);
 }));
 
-router.post('/', authorize('admin', 'salesman'), validate(createShopkeeperSchema), catchAsync(async (req, res) => {
+router.post('/', requirePermission('customers.create'), validate(createShopkeeperSchema), catchAsync(async (req, res) => {
   const body = { ...req.validatedBody };
   if (req.user.role === 'salesman') {
     body.salesman = req.user.id;
@@ -101,7 +103,7 @@ router.post('/', authorize('admin', 'salesman'), validate(createShopkeeperSchema
   res.status(201).json(formatShopkeeper(doc));
 }));
 
-router.patch('/:id', authorize('admin', 'salesman', 'shopkeeper'), validate(updateShopkeeperSchema), catchAsync(async (req, res) => {
+router.patch('/:id', requirePermission('customers.create'), validate(updateShopkeeperSchema), catchAsync(async (req, res) => {
   const { id } = req.params;
   const query = { _id: id };
 
@@ -126,7 +128,7 @@ router.patch('/:id', authorize('admin', 'salesman', 'shopkeeper'), validate(upda
   res.json(formatShopkeeper(doc));
 }));
 
-router.delete('/:id', authorize('admin'), catchAsync(async (req, res) => {
+router.delete('/:id', requirePermission('customers.create'), catchAsync(async (req, res) => {
   const { id } = req.params;
   const doc = await Shopkeeper.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
   if (!doc) throw AppError.notFound('Shopkeeper not found');

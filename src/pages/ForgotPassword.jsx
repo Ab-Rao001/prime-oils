@@ -1,54 +1,29 @@
 import React, { useState } from 'react';
-const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button, Input, Typography, Alert } from '../components/ui';
+
+const forgotPasswordSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Please enter a valid email address.')
+});
 
 export default function ForgotPassword({ onBack }) {
-  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
 
-  const inputStyle = {
-    width: '100%',
-    padding: '12px 14px',
-    background: 'rgba(255,255,255,0.1)',
-    border: '1px solid rgba(245,200,66,0.3)',
-    borderRadius: 10,
-    color: '#FDF6E3',
-    fontSize: 14,
-    outline: 'none',
-    boxSizing: 'border-box',
-    transition: 'all 0.3s',
-  };
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: '' }
+  });
 
-  const labelStyle = {
-    display: 'block',
-    fontSize: 11,
-    color: 'rgba(245,200,66,0.9)',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    fontWeight: 600,
-  };
-
-  const handleReset = async () => {
-    const trimmedEmail = String(email || '').trim().toLowerCase();
-
-    if (!trimmedEmail) {
-      setMessageType('error');
-      setMessage('Please enter your email address.');
-      return;
-    }
-
-    if (!validateEmail(trimmedEmail)) {
-      setMessageType('error');
-      setMessage('Please enter a valid email address.');
-      return;
-    }
-
+  const handleReset = async (data) => {
     setLoading(true);
     setMessage('');
     setMessageType('');
 
+    // Simulate API call
     setTimeout(() => {
       setMessageType('error');
       setMessage('Self-service password reset is currently unavailable. Please contact an administrator.');
@@ -57,87 +32,45 @@ export default function ForgotPassword({ onBack }) {
   };
 
   return (
-    <div>
-      <p style={{
-        fontSize: 13,
-        color: 'rgba(253,246,227,0.8)',
-        marginBottom: 20,
-        textAlign: 'center',
-        lineHeight: 1.5,
-      }}>
+    <div className="animate-fadeIn">
+      <Typography variant="body" className="text-muted-foreground mb-5 text-center leading-relaxed">
         Enter your email address and we'll send you a link to reset your password.
-      </p>
+      </Typography>
 
-      <div style={{ marginBottom: 18 }}>
-        <label style={labelStyle}>Email Address</label>
-        <input
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyPress={e => e.key === 'Enter' && handleReset()}
-          placeholder="your@email.com"
-          style={{
-            ...inputStyle,
-            backgroundColor: 'rgba(255,255,255,0.08)',
-          }}
+      <form onSubmit={handleSubmit(handleReset)} className="space-y-4">
+        <Input 
+          label="Email Address" 
+          type="email" 
+          placeholder="your@email.com" 
+          {...register('email')} 
+          error={errors.email}
+          className="bg-black/20 text-white border-gold/30 focus:border-gold"
+          labelClassName="text-gold"
         />
-      </div>
 
-      <button
-        onClick={handleReset}
-        disabled={loading}
-        style={{
-          width: '100%',
-          padding: '12px',
-          background: loading ? 'rgba(150,150,150,0.6)' : '#F5C842',
-          color: '#0D0A05',
-          border: 'none',
-          borderRadius: 10,
-          fontSize: 14,
-          fontWeight: 700,
-          cursor: loading ? 'not-allowed' : 'pointer',
-          boxShadow: '0 4px 14px rgba(245,200,66,0.3)',
-          opacity: loading ? 0.6 : 1,
-          transition: 'all 0.3s',
-          marginBottom: message ? 14 : 0,
-        }}
-      >
-        {loading ? 'Sending...' : 'Send Reset Link'}
-      </button>
+        {message && (
+          <Alert variant={messageType === 'success' ? 'success' : 'danger'} className="text-center">
+            {message}
+          </Alert>
+        )}
 
-      {message && (
-        <div style={{
-          padding: 12,
-          borderRadius: 8,
-          backgroundColor: messageType === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-          color: messageType === 'success' ? '#86efac' : '#fca5a5',
-          fontSize: 12,
-          border: `1px solid ${messageType === 'success' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-          textAlign: 'center',
-          marginBottom: 14,
-          lineHeight: 1.5,
-        }}>
-          {message}
-        </div>
-      )}
+        <Button
+          type="submit"
+          isLoading={loading}
+          className="w-full bg-gold hover:bg-gold-dark text-black font-bold shadow-[0_4px_14px_rgba(245,200,66,0.3)] border-none"
+        >
+          {loading ? 'Sending...' : 'Send Reset Link'}
+        </Button>
 
-      <button
-        onClick={onBack}
-        style={{
-          width: '100%',
-          padding: '11px',
-          background: 'rgba(255,255,255,0.08)',
-          color: 'rgba(245,200,66,0.9)',
-          border: '1px solid rgba(245,200,66,0.2)',
-          borderRadius: 10,
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: 'pointer',
-          transition: 'all 0.3s',
-        }}
-      >
-        ← Back to Login
-      </button>
+        <Button
+          type="button"
+          onClick={onBack}
+          variant="outline"
+          className="w-full bg-black/10 text-gold/90 border-gold/20 hover:bg-black/20 hover:border-gold/40 hover:text-gold"
+        >
+          &larr; Back to Login
+        </Button>
+      </form>
     </div>
   );
 }

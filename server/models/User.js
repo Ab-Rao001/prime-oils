@@ -40,6 +40,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Password is required'],
       minlength: [8, 'Password must be at least 8 characters'],
+      validate: {
+        validator: function(v) {
+          // At least one uppercase, one lowercase, one number, one special character
+          return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(v);
+        },
+        message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+      },
       select: false, // Exclude from default queries for security
     },
 
@@ -247,7 +254,10 @@ userSchema.statics.findByEmailWithPassword = function (email) {
  */
 userSchema.methods.recordFailedLogin = async function () {
   this.failedLoginAttempts += 1;
-  // Account lock timer removed as per request
+  if (this.failedLoginAttempts >= 5) {
+    this.isLocked = true;
+    this.lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // Lock for 15 minutes
+  }
   return this.save();
 };
 
@@ -267,7 +277,11 @@ userSchema.methods.recordSuccessfulLogin = async function () {
  * @returns {boolean} True if locked and lockout period hasn't expired
  */
 userSchema.methods.isAccountLocked = function () {
-  return false; // Lock timer disabled
+  if (!this.isLocked) return false;
+  if (this.lockedUntil && this.lockedUntil < new Date()) {
+    return false; // Lock expired
+  }
+  return true;
 };
 
 userSchema.index({ status: 1, role: 1 });
@@ -276,7 +290,7 @@ userSchema.index({ createdAt: -1 });
 userSchema.methods.createPasswordResetToken = function() {
   const resetToken = crypto.randomBytes(32).toString('hex');
   this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+  this.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 minutes
   return resetToken;
 };
 
