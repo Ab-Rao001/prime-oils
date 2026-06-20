@@ -113,7 +113,7 @@ export const login = catchAsync(async (req, res) => {
           displayName: user.name,
         });
         user.firebaseUid = firebaseUser.uid;
-        await user.save();
+        await User.updateOne({ _id: user._id }, { $set: { firebaseUid: firebaseUser.uid } });
         logger.info(`Legacy user ${user.email} successfully migrated to Firebase.`);
       } catch (firebaseErr) {
         logger.warn(`Failed to migrate legacy user ${user.email} to Firebase: ` + firebaseErr.message);

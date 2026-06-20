@@ -6,8 +6,8 @@
 
 import logger from './logger.js';
 
-let redisClient = null;
-let isRedisConnected = false;
+export let redisClient = null;
+export let isRedisConnected = false;
 
 // In-Memory cache fallback with TTL support
 class MemoryCache {

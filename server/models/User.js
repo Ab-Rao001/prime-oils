@@ -42,6 +42,10 @@ const userSchema = new mongoose.Schema(
       minlength: [8, 'Password must be at least 8 characters'],
       validate: {
         validator: function(v) {
+          // Only validate plaintext passwords (not bcrypt hashes already stored)
+          // Skip validation if password hasn't been modified (hashed passwords start with $2b$)
+          if (!this.isModified('password')) return true;
+          if (v && v.startsWith('$2b$')) return true; // Already hashed
           // At least one uppercase, one lowercase, one number, one special character
           return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(v);
         },
@@ -254,22 +258,24 @@ userSchema.statics.findByEmailWithPassword = function (email) {
  */
 userSchema.methods.recordFailedLogin = async function () {
   this.failedLoginAttempts += 1;
+  const update = { failedLoginAttempts: this.failedLoginAttempts };
   if (this.failedLoginAttempts >= 5) {
     this.isLocked = true;
-    this.lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // Lock for 15 minutes
+    this.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+    update.isLocked = true;
+    update.lockedUntil = this.lockedUntil;
   }
-  return this.save();
+  return this.constructor.updateOne({ _id: this._id }, { $set: update });
 };
 
 /**
  * Reset failed login attempts and unlock account
  */
 userSchema.methods.recordSuccessfulLogin = async function () {
-  this.failedLoginAttempts = 0;
-  this.isLocked = false;
-  this.lockedUntil = null;
-  this.lastLogin = new Date();
-  return this.save();
+  return this.constructor.updateOne(
+    { _id: this._id },
+    { $set: { failedLoginAttempts: 0, isLocked: false, lockedUntil: null, lastLogin: new Date() } }
+  );
 };
 
 /**

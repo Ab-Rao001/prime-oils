@@ -46,11 +46,19 @@ export function errorHandler(err, req, res, next) {
     error = AppError.internal('Something went wrong. Please try again later.');
   }
 
-  // 3. Ensure security middleware returns consistent responses
-  if (error.statusCode === 401 || err.name === 'UnauthorizedError' || err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+  // 3. Handle 401 errors
+  // JWT-specific errors get a generic message (don't leak token details)
+  if (err.name === 'UnauthorizedError' || err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
     return res.status(401).json({
       status: 'fail',
       message: 'Authentication required'
+    });
+  }
+  // AppError 401s (e.g. INVALID_CREDENTIALS) pass their real message through to the client
+  if (error.statusCode === 401) {
+    return res.status(401).json({
+      status: 'fail',
+      message: error.message || 'Authentication required'
     });
   }
 
@@ -69,9 +77,9 @@ export function errorHandler(err, req, res, next) {
   }
 
   if (error.statusCode === 400 || error.statusCode === 422 || error.statusCode === 409) {
-    return res.status(400).json({
+    return res.status(error.statusCode).json({
       status: 'fail',
-      message: 'Invalid request'
+      message: error.message || 'Invalid request'
     });
   }
 
