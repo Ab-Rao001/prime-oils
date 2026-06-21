@@ -2,7 +2,12 @@ import { request, API_BASE } from './client';
 
 export const authApi = {
   getMe: () => request('/auth/me'),
-  logout: () => request('/auth/logout', { method: 'POST' }),
+  logout: () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    return request('/auth/logout', { method: 'POST' });
+  },
   
   loginLocal: async (email, password) => {
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -13,7 +18,11 @@ export const authApi = {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error?.message || data.message || 'Login failed');
-    if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+      if (data.accessToken) localStorage.setItem('accessToken', data.accessToken);
+      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+    }
     return data;
   },
 
@@ -26,7 +35,11 @@ export const authApi = {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error?.message || data.message || 'Signup failed');
-    if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+      if (data.accessToken) localStorage.setItem('accessToken', data.accessToken);
+      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+    }
     return data;
   },
 

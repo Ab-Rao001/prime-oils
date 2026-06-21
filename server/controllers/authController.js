@@ -165,7 +165,7 @@ export const login = catchAsync(async (req, res) => {
 });
 
 export const refresh = catchAsync(async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.validatedBody?.refreshToken;
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken || req.validatedBody?.refreshToken;
   if (!refreshToken) {
     throw new AppError('Refresh token is required', 401, 'TOKEN_REQUIRED');
   }

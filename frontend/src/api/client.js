@@ -66,6 +66,10 @@ export async function request(path, options = {}, retries = 1) {
     if (!(options.body instanceof FormData)) {
         headers['Content-Type'] = 'application/json';
     }
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
 
     const res = await fetch(`${API_BASE}${path}`, {
       headers,
@@ -83,11 +87,16 @@ export async function request(path, options = {}, retries = 1) {
           const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}) 
+            headers: { 
+              'Content-Type': 'application/json',
+              ...(localStorage.getItem('refreshToken') ? { 'Authorization': `Bearer ${localStorage.getItem('refreshToken')}` } : {})
+            },
+            body: JSON.stringify({ refreshToken: localStorage.getItem('refreshToken') }) 
           });
           const refreshData = await refreshRes.json();
           if (refreshData.success) {
+            if (refreshData.accessToken) localStorage.setItem('accessToken', refreshData.accessToken);
+            if (refreshData.refreshToken) localStorage.setItem('refreshToken', refreshData.refreshToken);
             isRefreshing = false;
             onRefreshed();
             return request(path, options, retries - 1);
