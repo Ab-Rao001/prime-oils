@@ -67,7 +67,7 @@ class ReturnSettlementService {
 
       const shop = await Shopkeeper.findById(returnRequest.customer).session(session);
       if (shop) {
-        const newCredit = Math.max(0, (shop.credit || 0) - total);
+        const newCredit = (shop.credit || 0) - total;
         shop.credit = newCredit;
         await shop.save({ session });
       }

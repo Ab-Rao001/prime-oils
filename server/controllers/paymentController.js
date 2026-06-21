@@ -164,6 +164,23 @@ export const createPayment = catchAsync(async (req, res) => {
       status: calculatedStatus,
     }], { session });
 
+    if (paidVal > 0 && shopId) {
+      const sk = await Shopkeeper.findById(shopId).session(session);
+      if (sk) {
+        sk.credit = (sk.credit || 0) - paidVal;
+        await sk.save({ session });
+        
+        await AuditService.log({
+          user: req.user.id,
+          action: 'UPDATE_SHOPKEEPER_CREDIT',
+          collectionName: 'Shopkeeper',
+          documentId: sk._id,
+          newValue: { credit: sk.credit, deducted: paidVal, reason: 'Payment created' },
+          session
+        });
+      }
+    }
+
     await AuditService.log({
       user: req.user.id,
       action: 'CREATE_PAYMENT',
@@ -231,19 +248,42 @@ export const updatePayment = catchAsync(async (req, res) => {
       const isOrderFullyPaid = otherPaidSum + paidVal >= orderDoc.total;
       const newPaymentStatus = isOrderFullyPaid ? 'paid' : ((otherPaidSum + paidVal > 0) ? 'partial' : 'pending');
       
+      const validStatusesToUpdate = ['pending', 'pending_approval'];
+      const newOrderStatus = (isOrderFullyPaid && validStatusesToUpdate.includes(orderDoc.status)) 
+        ? 'paid' 
+        : orderDoc.status;
+
       const updatedOrder = await Order.findOneAndUpdate(
         { _id: orderId, __v: orderDoc.__v },
         { 
           $set: { 
             paymentStatus: newPaymentStatus, 
             paidAmount: otherPaidSum + paidVal,
-            status: isOrderFullyPaid ? 'paid' : orderDoc.status
+            status: newOrderStatus
           },
           $inc: { __v: 1 }
         },
         { new: true, session }
       );
       if (!updatedOrder) throw AppError.conflict('Order was updated concurrently');
+    }
+
+    const creditDelta = paidVal - payment.paid;
+    if (creditDelta !== 0 && payment.shop) {
+      const sk = await Shopkeeper.findById(payment.shop).session(session);
+      if (sk) {
+        sk.credit = (sk.credit || 0) - creditDelta;
+        await sk.save({ session });
+        
+        await AuditService.log({
+          user: req.user.id,
+          action: 'UPDATE_SHOPKEEPER_CREDIT',
+          collectionName: 'Shopkeeper',
+          documentId: sk._id,
+          newValue: { credit: sk.credit, deducted: creditDelta, reason: 'Payment updated' },
+          session
+        });
+      }
     }
 
     const newPaymentStatus = paidVal >= totalVal ? 'paid' : (paidVal > 0 ? 'partial' : 'pending');
@@ -331,6 +371,11 @@ export const payOrder = catchAsync(async (req, res) => {
       throw AppError.conflict('Payment was modified concurrently');
     }
 
+    const validStatusesToUpdate = ['pending', 'pending_approval'];
+    const newOrderStatus = (newStatus === 'paid' && validStatusesToUpdate.includes(orderDoc.status)) 
+      ? 'paid' 
+      : orderDoc.status;
+
     // Atomic update of Order with OCC
     const updatedOrder = await Order.findOneAndUpdate(
       { _id: orderDoc._id, __v: orderDoc.__v },
@@ -338,7 +383,7 @@ export const payOrder = catchAsync(async (req, res) => {
         $set: { 
           paymentStatus: newStatus, 
           paidAmount: newPaidAmount,
-          status: newStatus === 'paid' ? 'paid' : orderDoc.status
+          status: newOrderStatus
         },
         $inc: { __v: 1 }
       },
@@ -347,6 +392,23 @@ export const payOrder = catchAsync(async (req, res) => {
 
     if (!updatedOrder) {
       throw AppError.conflict('Order was modified concurrently');
+    }
+
+    if (orderDoc.shop) {
+      const sk = await Shopkeeper.findById(orderDoc.shop).session(session);
+      if (sk) {
+        sk.credit = (sk.credit || 0) - add;
+        await sk.save({ session });
+        
+        await AuditService.log({
+          user: req.user.id,
+          action: 'UPDATE_SHOPKEEPER_CREDIT',
+          collectionName: 'Shopkeeper',
+          documentId: sk._id,
+          newValue: { credit: sk.credit, deducted: add, reason: 'Order paid via payOrder' },
+          session
+        });
+      }
     }
 
     await AuditService.log({
