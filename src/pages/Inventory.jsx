@@ -157,17 +157,18 @@ export default function Inventory({ role }) {
         accessorKey: 'name', 
         sortable: true,
         flex: 2,
-        minWidth: 150,
+        minWidth: 200,
+        wrap: true,
         cell: (p) => (
-          <div className="flex items-center gap-3 font-semibold">
+          <div className="flex items-center gap-3 font-semibold min-w-0 w-full">
             {p.imageUrl && (
               <img
                 src={p.imageUrl}
                 alt=""
-                className="w-9 h-9 object-contain rounded-md bg-gray-50 dark:bg-gray-800"
+                className="w-9 h-9 object-contain rounded-md bg-gray-50 dark:bg-gray-800 shrink-0"
               />
             )}
-            <span style={ { wordBreak: 'break-word', display: 'block', lineHeight: '1.2' }}>{p.name}</span>
+            <span className="whitespace-normal break-words leading-tight" style={ { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.name}</span>
           </div>
         )
       },

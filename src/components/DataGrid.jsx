@@ -242,10 +242,10 @@ const DataGrid = ({
                         <div 
                           key={i} 
                           style={ { flex: col.width ? `0 0 ${col.width}px` : (col.flex || 1), minWidth: col.minWidth || (col.width ? undefined : '100px') } }
-                          className={`p-3 text-[13px] text-foreground flex items-center`}
+                          className={`p-3 text-[13px] text-foreground flex items-center min-w-0 ${!col.wrap ? 'overflow-hidden text-ellipsis whitespace-nowrap' : 'break-words'}`}
                           role="gridcell"
                         >
-                          {col.cell ? col.cell(row) : row[col.accessorKey]}
+                          {col.cell ? col.cell(row) : <span className="truncate w-full">{row[col.accessorKey]}</span>}
                         </div>
                       ))}
                     </>
