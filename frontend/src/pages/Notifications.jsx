@@ -2,12 +2,14 @@ import React from 'react';
 import C from '../theme';
 import Badge from '../components/Badge';
 import { userApi } from '../api/userApi';
+import { useNotificationStore } from '../store';
 
 const ICONS = { PAYMENT: '💳', ORDER: '🛒', INVENTORY: '📦', COMPLAINT: '⚠️', DELIVERY: '🚚', SECURITY: '🔒', SYSTEM: '⚙️', payment: '💳', order: '🛒', stock: '📦', complaint: '⚠️', delivery: '🚚' };
 const COLS  = { PAYMENT: C.warn, ORDER: C.info, INVENTORY: C.danger, COMPLAINT: C.danger, DELIVERY: C.success, SECURITY: C.danger, SYSTEM: C.gold, payment: C.warn, order: C.info, stock: C.danger, complaint: C.danger, delivery: C.success };
 
-export default function Notifications({ role, user, notifications = [], setNotifications }) {
-  const setNotifs = setNotifications;
+export default function Notifications({ role, user }) {
+  const notifications = useNotificationStore(state => state.notifications);
+  const setNotifs = useNotificationStore(state => state.setNotifications);
 
   const isVisible = n => {
     if (role === 'admin') return true;
