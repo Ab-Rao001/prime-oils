@@ -507,6 +507,16 @@ export const resetPassword = catchAsync(async (req, res) => {
   user.tokenVersion = (user.tokenVersion || 0) + 1; 
   await user.save();
   
+  // Sync password with Firebase
+  if (isFirebaseInitialized && auth && user.firebaseUid) {
+    try {
+      await auth.updateUser(user.firebaseUid, { password: req.validatedBody.password });
+      logger.info(`Synchronized password reset to Firebase for user ${user._id}`);
+    } catch (fbErr) {
+      logger.warn(`Failed to sync password reset to Firebase for user ${user._id}: ${fbErr.message}`);
+    }
+  }
+  
   // Revoke all sessions
   await Session.updateMany({ user: user._id }, { isRevoked: true });
   
@@ -534,6 +544,16 @@ export const changePassword = catchAsync(async (req, res) => {
   user.password = newPassword;
   user.tokenVersion = (user.tokenVersion || 0) + 1; 
   await user.save();
+
+  // Sync password with Firebase
+  if (isFirebaseInitialized && auth && user.firebaseUid) {
+    try {
+      await auth.updateUser(user.firebaseUid, { password: newPassword });
+      logger.info(`Synchronized password change to Firebase for user ${user._id}`);
+    } catch (fbErr) {
+      logger.warn(`Failed to sync password change to Firebase for user ${user._id}: ${fbErr.message}`);
+    }
+  }
 
   await Session.updateMany({ user: user._id }, { isRevoked: true });
 

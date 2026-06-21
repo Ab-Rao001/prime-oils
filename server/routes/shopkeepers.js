@@ -105,7 +105,7 @@ router.post('/', requirePermission('customers.create'), validate(createShopkeepe
 
 router.patch('/:id', requirePermission('customers.create'), validate(updateShopkeeperSchema), catchAsync(async (req, res) => {
   const { id } = req.params;
-  const query = { _id: id };
+  const query = { _id: id, isDeleted: { $ne: true } };
 
   if (req.user.role === 'shopkeeper') {
     const userDoc = await User.findById(req.user.id);

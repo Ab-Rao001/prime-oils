@@ -152,8 +152,12 @@ router.patch('/:complaintId', requirePermission('returns.manage'), validate(upda
     if (p) updates.productRef = p._id;
   }
 
+  const query = req.params.complaintId.match(/^[0-9a-fA-F]{24}$/) 
+    ? { _id: req.params.complaintId } 
+    : { complaintId: req.params.complaintId };
+
   const doc = await Complaint.findOneAndUpdate(
-    { complaintId: req.params.complaintId },
+    query,
     updates,
     { new: true }
   ).populate('shop').populate('productRef').populate('orderRef').populate('returnRequestId');
