@@ -50,9 +50,18 @@ import { v4 as uuidv4 } from 'uuid';
 const app = express();
 const PORT = config.port;
 
-// Disable ETags globally — prevents browsers from caching API responses
-// and serving stale 304 Not Modified responses instead of fresh data.
+// Disable ETags globally
 app.disable('etag');
+
+// Normalize URLs to remove double slashes caused by misconfigured proxies (e.g. Vercel)
+app.use((req, res, next) => {
+  if (req.url.includes('//')) {
+    req.url = req.url.replace(/\/\/+/g, '/');
+    req.originalUrl = req.originalUrl.replace(/\/\/+/g, '/');
+    req.path = req.path.replace(/\/\/+/g, '/');
+  }
+  next();
+});
 
 // Add no-cache headers to all API responses
 app.use((req, res, next) => {
@@ -181,30 +190,37 @@ app.get('/api/health/detailed', (req, res) => {
   });
 });
 
-// 5. Routes definitions (ordered properly)
-app.use('/api/auth', authRouter);
-app.use('/api/payments', paymentsRouter);
-app.use('/api/orders', ordersRouter);
-app.use('/api/returns', returnsRouter);
+// 5. Routes definitions
+const apiRouter = express.Router();
+
+apiRouter.use('/auth', authRouter);
+apiRouter.use('/payments', paymentsRouter);
+apiRouter.use('/orders', ordersRouter);
+apiRouter.use('/returns', returnsRouter);
 
 // Other routes
-app.use('/api/products', productsRouter);
-app.use('/api/shopkeepers', shopkeepersRouter);
-app.use('/api/complaints', complaintsRouter);
-app.use('/api/campaigns', campaignsRouter);
-app.use('/api/notifications', notificationsRouter);
-app.use('/api/purchaseOrders', purchaseOrdersRouter);
-app.use('/api/charts', chartsRouter);
-app.use('/api/reports', reportsRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/transactions', transactionsRouter);
-app.use('/api/analytics', analyticsRouter);
-app.use('/api/approvals', approvalsRouter);
-app.use('/api/dispatch', dispatchRouter);
-app.use('/api/expenses', expensesRouter);
-app.use('/api/credit-notes', creditNotesRouter);
-app.use('/api/transfers', transfersRouter);
-app.use('/api/vehicles', vehiclesRouter);
+apiRouter.use('/products', productsRouter);
+apiRouter.use('/shopkeepers', shopkeepersRouter);
+apiRouter.use('/complaints', complaintsRouter);
+apiRouter.use('/campaigns', campaignsRouter);
+apiRouter.use('/notifications', notificationsRouter);
+apiRouter.use('/purchaseOrders', purchaseOrdersRouter);
+apiRouter.use('/charts', chartsRouter);
+apiRouter.use('/reports', reportsRouter);
+apiRouter.use('/users', usersRouter);
+apiRouter.use('/transactions', transactionsRouter);
+apiRouter.use('/analytics', analyticsRouter);
+apiRouter.use('/approvals', approvalsRouter);
+apiRouter.use('/dispatch', dispatchRouter);
+apiRouter.use('/expenses', expensesRouter);
+apiRouter.use('/credit-notes', creditNotesRouter);
+apiRouter.use('/transfers', transfersRouter);
+apiRouter.use('/vehicles', vehiclesRouter);
+
+// Mount the apiRouter at both /api and / 
+// This gracefully handles cases where Vercel/proxies strip the /api prefix during rewrites
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // 404 Handler - Forward to global error handler
 app.use((req, res, next) => {
