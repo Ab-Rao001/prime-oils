@@ -51,7 +51,8 @@ export const permissions = {
     'complaints.create.self',
     'customers.read.self', // Shopkeeper reads their own shop info
     'returns.read',
-    'returns.create.self'
+    'returns.create.self',
+    'dispatch.read'
   ]
 };
 
