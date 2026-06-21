@@ -139,6 +139,17 @@ import mongoose from 'mongoose';
 import { isRedisConnected } from './utils/cache.js';
 import { getWorkerStatus } from './services/QueueService.js';
 
+// Friendly Root API message
+app.get('/', (req, res) => res.json({
+  success: true,
+  message: 'Prime Oils API Server is running. Please access the application via your Vercel frontend client.',
+  endpoints: {
+    health: '/api/health',
+    live: '/health/live',
+    ready: '/health/ready'
+  }
+}));
+
 // Health check endpoints (no auth required)
 app.get('/api/health', (req, res) => res.json({
   uptime: process.uptime(),
