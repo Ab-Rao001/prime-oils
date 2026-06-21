@@ -11,7 +11,6 @@ const transactionSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 transactionSchema.index({ status: 1, createdAt: -1 });
-transactionSchema.index({ order: 1 });
 transactionSchema.index({ createdAt: -1 });
 
 export default mongoose.model('Transaction', transactionSchema);
