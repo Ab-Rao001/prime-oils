@@ -69,6 +69,7 @@ export default function Returns({ role }) {
     {
       header: 'RMA ID',
       accessorKey: 'rmaId',
+      minWidth: 110,
       cell: r => (
         <button type="button" className="text-left" onClick={() => setDetailTarget(r)}>
           <Typography variant="body" weight="semibold" className="text-gold hover:underline">{r.rmaId || r.id}</Typography>
@@ -78,27 +79,32 @@ export default function Returns({ role }) {
     {
       header: 'Order',
       accessorKey: 'order',
+      minWidth: 100,
       cell: r => typeof r.order === 'object' ? r.order.orderId : r.order,
     },
     {
       header: 'Customer',
       accessorKey: 'customer',
+      minWidth: 140,
       cell: r => typeof r.customer === 'object' ? r.customer.name : r.customer,
     },
-    { header: 'Reason', accessorKey: 'reason' },
+    { header: 'Reason', accessorKey: 'reason', minWidth: 130 },
     {
       header: 'Resolution',
       accessorKey: 'resolutionType',
+      minWidth: 110,
       cell: r => <Badge variant="default">{(r.resolutionType || 'REFUND').replace(/_/g, ' ')}</Badge>,
     },
     {
       header: 'Items',
       accessorKey: 'products',
+      minWidth: 80,
       cell: r => `${(r.products || []).reduce((s, p) => s + p.quantity, 0)} units`,
     },
     {
       header: 'Status',
       accessorKey: 'status',
+      minWidth: 110,
       cell: r => (
         <div className="flex flex-col gap-1">
           <Badge variant={STATUS_VARIANT[r.status] || 'default'}>{r.status}</Badge>
@@ -108,6 +114,7 @@ export default function Returns({ role }) {
     },
     {
       header: 'Actions',
+      minWidth: 200,
       cell: r => (
         <div className="flex gap-1.5 flex-wrap">
           {isWarehouse && r.status === 'REQUESTED' && (

@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { userApi } from '../api/userApi';
 import { orderApi } from '../api/orderApi';
 import { paymentApi } from '../api/paymentApi';
+import { returnApi } from '../api/returnApi';
 
 export default function Sidebar({ onLogout }) {
   const { user } = useAuth();
@@ -59,6 +60,13 @@ export default function Sidebar({ onLogout }) {
     refetchInterval: 30000
   });
 
+  const { data: pendingReturnsData } = useQuery({
+    queryKey: ['returns', { status: 'REQUESTED' }],
+    queryFn: () => returnApi.getReturns({ status: 'REQUESTED' }),
+    enabled: user?.role === 'admin' || user?.role === 'supplier',
+    refetchInterval: 30000
+  });
+
   const openComplaints = Array.isArray(complaintsData?.data || complaintsData) 
     ? (complaintsData?.data || complaintsData).filter(c => c.status === 'pending' || c.status === 'processing').length 
     : 0;
@@ -73,6 +81,10 @@ export default function Sidebar({ onLogout }) {
 
   const pendingPayments = Array.isArray(paymentsData?.data || paymentsData)
     ? (paymentsData?.data || paymentsData).filter(p => p.status === 'partial' || p.status === 'pending' || (p.total > (p.paid || 0))).length
+    : 0;
+
+  const pendingReturns = Array.isArray(pendingReturnsData?.data || pendingReturnsData)
+    ? (pendingReturnsData?.data || pendingReturnsData).length
     : 0;
 
   if (!user) return null;
@@ -178,6 +190,14 @@ export default function Sidebar({ onLogout }) {
                       aria-label={`${pendingPayments} pending payments`}
                     >
                       {pendingPayments}
+                    </span>
+                  )}
+                  {item.id === 'returns' && pendingReturns > 0 && (
+                    <span
+                      className="ml-auto bg-danger text-white text-[9px] rounded-lg py-0.5 px-1.5 font-bold"
+                      aria-label={`${pendingReturns} pending returns`}
+                    >
+                      {pendingReturns}
                     </span>
                   )}
                 </>
