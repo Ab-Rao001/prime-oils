@@ -53,7 +53,6 @@ export default function PurchaseOrders({ role, users }) {
     setSaving(true);
     try {
       const created = await inventoryApi.createPurchaseOrder({
-        supplier: form.supplier || undefined,
         notes: form.notes,
         items: form.items.map(i => ({
           productId: i.productId,
@@ -63,7 +62,7 @@ export default function PurchaseOrders({ role, users }) {
       });
       setPos(prev => [created, ...prev]);
       setShowModal(false);
-      setForm({ supplier: '', notes: '', items: [] });
+      setForm({ notes: '', items: [] });
       toast.success('Purchase order created');
     } catch (err) {
       toast.error(err.message || 'Failed to create PO');
@@ -91,7 +90,7 @@ export default function PurchaseOrders({ role, users }) {
   const columns = useMemo(() => [
     { header: 'PO ID', accessorKey: 'poId', sortable: true, cell: (po) => <span style={ { fontWeight: 600 }}>{po.poId}</span> },
     { header: 'Date', accessorKey: 'createdAt', sortable: true, cell: (po) => new Date(po.createdAt).toLocaleDateString() },
-    { header: 'Supplier', accessorKey: 'supplier', sortable: true, cell: (po) => po.supplier?.name || 'N/A' },
+    { header: 'Invoice #', accessorKey: 'notes', sortable: true, cell: (po) => po.notes || 'N/A' },
     { header: 'Items', accessorKey: 'items', cell: (po) => (
       <div style={ { fontSize: 12 }}>
         {po.items.map((i, idx) => (
@@ -152,15 +151,8 @@ export default function PurchaseOrders({ role, users }) {
               <div style={ { padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={ { display: 'flex', gap: 16 }}>
                   <div style={ { flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <label style={ { fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Supplier</label>
-                    <select value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} style={ { padding: '10px 12px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14 }}>
-                      <option value="">-- Select Supplier --</option>
-                      {suppliers.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div style={ { flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <label style={ { fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Notes</label>
-                    <input type="text" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Reference or invoice #..." style={ { padding: '10px 12px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14 }} />
+                    <label style={ { fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Invoice Number</label>
+                    <input type="text" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Invoice #..." style={ { padding: '10px 12px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14 }} required />
                   </div>
                 </div>
 
