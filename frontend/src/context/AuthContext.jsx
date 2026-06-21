@@ -42,33 +42,7 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('auth:logout', handleForceLogout);
   }, []);
 
-  // Inactivity Auto-Logout (5 minutes)
-  useEffect(() => {
-    let inactivityTimer;
-    
-    const resetTimer = () => {
-      clearTimeout(inactivityTimer);
-      if (user) {
-        inactivityTimer = setTimeout(() => {
-          logout();
-          setError('You have been securely logged out due to 5 minutes of inactivity.');
-        }, 5 * 60 * 1000); // 5 minutes
-      }
-    };
 
-    if (user) {
-      resetTimer();
-      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-      
-      // Throttle mousemove slightly for performance by only attaching to document body
-      events.forEach(evt => document.addEventListener(evt, resetTimer, { passive: true }));
-
-      return () => {
-        clearTimeout(inactivityTimer);
-        events.forEach(evt => document.removeEventListener(evt, resetTimer, { passive: true }));
-      };
-    }
-  }, [user, logout]);
 
   const login = useCallback(async (email, password) => {
     setError('');
@@ -113,6 +87,34 @@ export const AuthProvider = ({ children }) => {
     queryClient.clear(); // Clear all cached data!
     useNotificationStore.getState().clearNotifications();
   }, []);
+
+  // Inactivity Auto-Logout (5 minutes)
+  useEffect(() => {
+    let inactivityTimer;
+    
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      if (user) {
+        inactivityTimer = setTimeout(() => {
+          logout();
+          setError('You have been securely logged out due to 5 minutes of inactivity.');
+        }, 5 * 60 * 1000); // 5 minutes
+      }
+    };
+
+    if (user) {
+      resetTimer();
+      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+      
+      // Throttle mousemove slightly for performance by only attaching to document body
+      events.forEach(evt => document.addEventListener(evt, resetTimer, { passive: true }));
+
+      return () => {
+        clearTimeout(inactivityTimer);
+        events.forEach(evt => document.removeEventListener(evt, resetTimer, { passive: true }));
+      };
+    }
+  }, [user, logout]);
 
   const value = useMemo(() => ({
     user,
