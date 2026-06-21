@@ -131,9 +131,23 @@ export default function Shopkeepers({ role }) {
 
   const getLocation = (setValueFn) => {
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(pos => {
-        setValueFn('loc', `${pos.coords.latitude},${pos.coords.longitude}`, { shouldValidate: true });
-      }, () => alert('Unable to retrieve your location'));
+      navigator.geolocation.getCurrentPosition(async pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // Instant coordinate population
+        setValueFn('loc', `${lat},${lng}`, { shouldValidate: true });
+        
+        // High-precision reverse geocoding (House No, Street, City)
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+          const data = await res.json();
+          const { formatNominatimAddress } = await import('../utils/addressUtils');
+          const formatted = formatNominatimAddress(data, lat, lng);
+          setValueFn('loc', formatted, { shouldValidate: true });
+        } catch (err) {
+          console.warn('Reverse geocoding failed', err);
+        }
+      }, () => alert('Unable to retrieve your location. Please check browser permissions.'));
     }
   };
 
