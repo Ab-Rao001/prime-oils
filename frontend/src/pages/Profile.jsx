@@ -59,9 +59,9 @@ export default function Profile({ user }) {
         setProfile(prev => ({ ...prev, avatarUrl: res.data.avatarUrl }));
         
         // Update local storage so the UI updates globally
-        const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const savedUser = JSON.parse(sessionStorage.getItem('user') || '{}');
         const updatedUser = { ...savedUser, avatarUrl: res.data.avatarUrl };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        sessionStorage.setItem('user', JSON.stringify(updatedUser));
         
         toast.success('Profile picture updated!');
         setTimeout(() => window.location.reload(), 1000); // refresh to sync sidebar
@@ -84,9 +84,9 @@ export default function Profile({ user }) {
       toast.success('Profile updated successfully');
       
       // Update local storage so the UI updates
-      const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const savedUser = JSON.parse(sessionStorage.getItem('user') || '{}');
       const updatedUser = { ...savedUser, name: profile.name, phone: profile.phone, address: profile.address };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      sessionStorage.setItem('user', JSON.stringify(updatedUser));
       // In a real app we'd dispatch context update here, but a reload ensures the easiest sync
       setTimeout(() => window.location.reload(), 1000);
     } catch (e) {

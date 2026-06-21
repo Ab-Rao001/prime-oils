@@ -144,8 +144,8 @@ export const login = catchAsync(async (req, res) => {
 
     const isProd = process.env.NODE_ENV !== 'development';
     const cookieOptions = { httpOnly: true, secure: isProd, sameSite: isProd ? 'none' : 'lax' };
-    res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
-    res.cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
+    res.cookie('accessToken', accessToken, cookieOptions);
+    res.cookie('refreshToken', refreshToken, cookieOptions);
 
     return res.json({
       success: true,
@@ -254,18 +254,9 @@ export const refresh = catchAsync(async (req, res) => {
   });
 
   const isProduction = process.env.NODE_ENV === 'production';
-  res.cookie('accessToken', accessToken, { 
-    httpOnly: true, 
-    secure: isProduction, 
-    sameSite: 'strict',
-    maxAge: 15 * 60 * 1000 
-  });
-  res.cookie('refreshToken', newRefreshToken, {
-    httpOnly: true, 
-    secure: isProduction, 
-    sameSite: 'strict',
-    maxAge: 30 * 24 * 60 * 60 * 1000 
-  });
+  const cookieOptions = { httpOnly: true, secure: isProduction, sameSite: 'strict' };
+  res.cookie('accessToken', accessToken, cookieOptions);
+  res.cookie('refreshToken', newRefreshToken, cookieOptions);
 
   res.json({ success: true, accessToken, refreshToken: newRefreshToken });
 });
@@ -311,7 +302,7 @@ export const signup = catchAsync(async (req, res) => {
   }
 
   // ── Step 2: Create user in MongoDB (with firebaseUid already set) ─────────
-  const newUser = await User.create({
+  const userData = {
     name,
     email: email.toLowerCase(),
     password,              // bcrypt hash happens via pre-save hook
@@ -319,8 +310,9 @@ export const signup = catchAsync(async (req, res) => {
     role: safeRole,
     status: 'active',
     active: true,
-    firebaseUid,           // stored at creation — no extra save() needed
-  });
+  };
+  if (firebaseUid) userData.firebaseUid = firebaseUid;
+  const newUser = await User.create(userData);
 
   // ── Step 3: Auto-link shopkeeper profile ─────────────────────────────────
   if (newUser.role === 'shopkeeper') {
@@ -376,8 +368,8 @@ export const signup = catchAsync(async (req, res) => {
 
   const isProd = process.env.NODE_ENV !== 'development';
   const cookieOptions = { httpOnly: true, secure: isProd, sameSite: isProd ? 'none' : 'lax' };
-  res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
-  res.cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie('accessToken', accessToken, cookieOptions);
+  res.cookie('refreshToken', refreshToken, cookieOptions);
 
   res.status(201).json({
     success: true,

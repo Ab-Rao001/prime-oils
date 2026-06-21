@@ -66,7 +66,7 @@ export async function request(path, options = {}, retries = 1) {
     if (!(options.body instanceof FormData)) {
         headers['Content-Type'] = 'application/json';
     }
-    const token = localStorage.getItem('accessToken');
+    const token = sessionStorage.getItem('accessToken');
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
@@ -81,7 +81,7 @@ export async function request(path, options = {}, retries = 1) {
     
     // Auto-refresh token on 401
     if (res.status === 401 && !path.includes('/auth/login') && retries > 0) {
-      const currentRefreshToken = localStorage.getItem('refreshToken');
+      const currentRefreshToken = sessionStorage.getItem('refreshToken');
       if (!currentRefreshToken) {
         window.dispatchEvent(new CustomEvent('auth:logout'));
         throw new Error('No valid session found. Please log in.');
@@ -95,14 +95,14 @@ export async function request(path, options = {}, retries = 1) {
             credentials: 'include',
             headers: { 
               'Content-Type': 'application/json',
-              ...(localStorage.getItem('refreshToken') ? { 'Authorization': `Bearer ${localStorage.getItem('refreshToken')}` } : {})
+              ...(sessionStorage.getItem('refreshToken') ? { 'Authorization': `Bearer ${sessionStorage.getItem('refreshToken')}` } : {})
             },
-            body: JSON.stringify({ refreshToken: localStorage.getItem('refreshToken') }) 
+            body: JSON.stringify({ refreshToken: sessionStorage.getItem('refreshToken') }) 
           });
           const refreshData = await refreshRes.json();
           if (refreshData.success) {
-            if (refreshData.accessToken) localStorage.setItem('accessToken', refreshData.accessToken);
-            if (refreshData.refreshToken) localStorage.setItem('refreshToken', refreshData.refreshToken);
+            if (refreshData.accessToken) sessionStorage.setItem('accessToken', refreshData.accessToken);
+            if (refreshData.refreshToken) sessionStorage.setItem('refreshToken', refreshData.refreshToken);
             isRefreshing = false;
             onRefreshed();
             return request(path, options, retries - 1);

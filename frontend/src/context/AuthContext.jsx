@@ -16,12 +16,12 @@ export const AuthProvider = ({ children }) => {
         if (res.success && res.user) {
           setUser(res.user);
           setUserRole(res.user.role);
-          localStorage.setItem('user', JSON.stringify(res.user));
+          sessionStorage.setItem('user', JSON.stringify(res.user));
         }
       } catch (err) {
         setUser(null);
         setUserRole(null);
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
       } finally {
         setLoading(false);
       }
@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
     fetchUser();
 
     const handleForceLogout = () => {
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
       setUser(null);
       setUserRole(null);
       setError('Session expired. Please log in again.');
@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       console.error('Logout failed on backend:', e);
     }
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('user');
     setUser(null);
     setUserRole(null);
     setError('');

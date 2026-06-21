@@ -3,9 +3,9 @@ import { request, API_BASE } from './client';
 export const authApi = {
   getMe: () => request('/auth/me'),
   logout: () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
     return request('/auth/logout', { method: 'POST' });
   },
   
@@ -19,9 +19,9 @@ export const authApi = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error?.message || data.message || 'Login failed');
     if (data.user) {
-      localStorage.setItem('user', JSON.stringify(data.user));
-      if (data.accessToken) localStorage.setItem('accessToken', data.accessToken);
-      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+      sessionStorage.setItem('user', JSON.stringify(data.user));
+      if (data.accessToken) sessionStorage.setItem('accessToken', data.accessToken);
+      if (data.refreshToken) sessionStorage.setItem('refreshToken', data.refreshToken);
     }
     return data;
   },
@@ -36,9 +36,9 @@ export const authApi = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error?.message || data.message || 'Signup failed');
     if (data.user) {
-      localStorage.setItem('user', JSON.stringify(data.user));
-      if (data.accessToken) localStorage.setItem('accessToken', data.accessToken);
-      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+      sessionStorage.setItem('user', JSON.stringify(data.user));
+      if (data.accessToken) sessionStorage.setItem('accessToken', data.accessToken);
+      if (data.refreshToken) sessionStorage.setItem('refreshToken', data.refreshToken);
     }
     return data;
   },

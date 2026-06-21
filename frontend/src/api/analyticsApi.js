@@ -13,7 +13,7 @@ export const analyticsApi = {
   downloadReportExport: async ({ startDate, endDate, format }) => {
     const url = `${API_BASE}${buildUrl('/reports/orders/export', { startDate, endDate, format })}`;
     const headers = {};
-    const token = localStorage.getItem('accessToken');
+    const token = sessionStorage.getItem('accessToken');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
