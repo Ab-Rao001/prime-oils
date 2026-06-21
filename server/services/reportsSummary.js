@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Payment from '../models/Payment.js';
 import Expense from '../models/Expense.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
 import { buildReportsScope, revenueOrderMatch } from '../utils/reportsScope.js';
 
 function formatWeekLabel(date) {
@@ -21,6 +22,14 @@ export const getReportsSummary = async (user, startDate, endDate) => {
     expenseMatch.date = { ...expenseMatch.date, $lte: end };
   }
 
+  const poMatch = { status: 'received', isDeleted: { $ne: true } };
+  if (startDate) poMatch.createdAt = { ...poMatch.createdAt, $gte: new Date(startDate) };
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    poMatch.createdAt = { ...poMatch.createdAt, $lte: end };
+  }
+
   const [
     revenueAgg,
     orderCountAgg,
@@ -30,6 +39,7 @@ export const getReportsSummary = async (user, startDate, endDate) => {
     weekAgg,
     topProductsAgg,
     expenseAgg,
+    poAgg,
   ] = await Promise.all([
     Order.aggregate([
       { $match: revenueMatch },
@@ -131,6 +141,11 @@ export const getReportsSummary = async (user, startDate, endDate) => {
       { $match: expenseMatch },
       { $group: { _id: null, totalExpenses: { $sum: '$amount' } } }
     ]),
+
+    PurchaseOrder.aggregate([
+      { $match: poMatch },
+      { $group: { _id: null, totalPoExpenses: { $sum: '$totalAmount' } } }
+    ]),
   ]);
 
   const revenueByWeek = weekAgg.map(row => ({
@@ -152,8 +167,8 @@ export const getReportsSummary = async (user, startDate, endDate) => {
     })),
     revenueByWeek,
     topProducts: topProductsAgg,
-    totalExpenses: expenseAgg[0]?.totalExpenses || 0,
-    netProfit: (revenueAgg[0]?.totalRevenue || 0) - (expenseAgg[0]?.totalExpenses || 0),
+    totalExpenses: (expenseAgg[0]?.totalExpenses || 0) + (poAgg[0]?.totalPoExpenses || 0),
+    netProfit: (revenueAgg[0]?.totalRevenue || 0) - ((expenseAgg[0]?.totalExpenses || 0) + (poAgg[0]?.totalPoExpenses || 0)),
   };
 };
 

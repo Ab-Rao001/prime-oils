@@ -14,8 +14,8 @@ function dateRangeLabel(startDate, endDate) {
   return 'All dates';
 }
 
-export function streamOrdersPdf(res, { orders, summary, startDate, endDate }) {
-  const filename = `orders-report-${startDate || 'all'}-${endDate || 'all'}.pdf`;
+export function streamOrdersPdf(res, { orders, topProducts, summary, startDate, endDate }) {
+  const filename = `analytics-report-${startDate || 'all'}-${endDate || 'all'}.pdf`;
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -25,10 +25,42 @@ export function streamOrdersPdf(res, { orders, summary, startDate, endDate }) {
 
   doc.fontSize(22).font('Helvetica-Bold').text(COMPANY_NAME, { align: 'center' });
   doc.moveDown(0.3);
-  doc.fontSize(12).font('Helvetica').text('Orders Report', { align: 'center' });
-  doc.text(`Period: ${dateRangeLabel(startDate, endDate)}`, { align: 'center' });
-  doc.moveDown(1);
+  doc.fontSize(14).font('Helvetica-Bold').text('Analytics & Financial Report', { align: 'center' });
+  doc.fontSize(10).font('Helvetica').text(`Period: ${dateRangeLabel(startDate, endDate)}`, { align: 'center' });
+  doc.moveDown(2);
 
+  doc.fontSize(14).font('Helvetica-Bold').text('Financial Summary', 48);
+  doc.moveDown(0.5);
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Total Revenue: ${formatMoney(summary.totalRevenue)}`);
+  doc.text(`Total Collected: ${formatMoney(summary.totalPaid)}`);
+  doc.text(`Outstanding Balance: ${formatMoney(summary.outstandingBalance)}`);
+  doc.text(`Total Expenses: ${formatMoney(summary.totalExpenses)}`);
+  doc.text(`Net Profit: ${formatMoney(summary.netProfit)}`);
+  doc.text(`Total Orders: ${summary.totalOrders}`);
+  doc.moveDown(2);
+
+  if (topProducts && topProducts.length > 0) {
+    doc.fontSize(14).font('Helvetica-Bold').text('Top Products', 48);
+    doc.moveDown(0.5);
+    doc.fontSize(10).font('Helvetica-Bold');
+    
+    let prodY = doc.y;
+    doc.text('Product Name', 48, prodY, { width: 300 });
+    doc.text('Quantity Sold', 348, prodY);
+    doc.moveDown(0.5);
+    doc.font('Helvetica');
+    
+    topProducts.slice(0, 5).forEach(p => {
+      let py = doc.y;
+      doc.text(p.name, 48, py, { width: 300 });
+      doc.text(String(p.quantitySold), 348, py);
+    });
+    doc.moveDown(2);
+  }
+
+  doc.fontSize(14).font('Helvetica-Bold').text('Recent Orders (Transcript)', 48);
+  doc.moveDown(0.5);
   const tableTop = doc.y;
   const colX = [48, 120, 260, 310, 380, 460];
   const headers = ['Order #', 'Shopkeeper', 'Items', 'Total', 'Status'];
@@ -40,7 +72,7 @@ export function streamOrdersPdf(res, { orders, summary, startDate, endDate }) {
 
   let y = doc.y;
   orders.forEach(order => {
-    if (y > 700) {
+    if (y > 750) {
       doc.addPage();
       y = 48;
     }
@@ -55,15 +87,6 @@ export function streamOrdersPdf(res, { orders, summary, startDate, endDate }) {
     y += 18;
     doc.y = y;
   });
-
-  doc.moveDown(1.5);
-  doc.font('Helvetica-Bold').fontSize(11);
-  doc.text('Summary', 48);
-  doc.font('Helvetica').fontSize(10);
-  doc.text(`Total orders: ${summary.totalOrders}`, 48);
-  doc.text(`Total revenue: ${formatMoney(summary.totalRevenue)}`, 48);
-  doc.text(`Total collected: ${formatMoney(summary.totalPaid)}`, 48);
-  doc.text(`Outstanding balance: ${formatMoney(summary.outstandingBalance)}`, 48);
 
   doc.end();
 }
