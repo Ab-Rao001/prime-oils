@@ -57,7 +57,7 @@ const ALLOWED_TRANSITIONS = {
 
 
 const buildOrderScope = async (user) => {
-  const filter = { isDeleted: { $ne: true } };
+  const filter = { isDeleted: false };
   if (user.role === 'shopkeeper') {
     const userDoc = await User.findById(user.id);
     const ownerName = userDoc ? userDoc.name : '';

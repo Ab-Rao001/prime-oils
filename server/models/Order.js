@@ -33,8 +33,10 @@ const orderSchema = new mongoose.Schema({
 
 // Define indexes for scalability
 orderSchema.index({ status: 1, createdAt: -1 }); // Compound index for order dashboard queries
+orderSchema.index({ shop: 1, isDeleted: 1, createdAt: -1 }); // High-performance shopkeeper queries
 orderSchema.index({ shop: 1, status: 1, createdAt: -1 }); // Compound index for customer order history lookup
 orderSchema.index({ shop: 1, createdAt: -1 });
+orderSchema.index({ man: 1, isDeleted: 1, createdAt: -1 }); // High-performance salesman queries
 orderSchema.index({ man: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 orderSchema.index({ man: 1, date: -1 }); // Compound index for salesman daily tracking
