@@ -114,9 +114,9 @@ export default function Returns({ role }) {
     },
     {
       header: 'Actions',
-      minWidth: 200,
+      width: 220,
       cell: r => (
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex gap-1.5 flex-nowrap whitespace-nowrap">
           {isWarehouse && r.status === 'REQUESTED' && (
             <Button size="xs" variant="outline" onClick={() => setInspectTarget(r)}>Inspect</Button>
           )}

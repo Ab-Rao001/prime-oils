@@ -75,7 +75,7 @@ export default function CreateReturnModal({
   };
 
   return (
-    <EnterpriseModal isOpen={isOpen} onClose={onClose} title="Create Return Request" size="lg">
+    <EnterpriseModal isOpen={isOpen} onClose={onClose} title="Create Return Request" size="xl">
       <form onSubmit={handleSubmit} className="space-y-4">
         <Select
           label="Order"
