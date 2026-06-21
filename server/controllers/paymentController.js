@@ -83,6 +83,13 @@ export const createPayment = catchAsync(async (req, res) => {
   const paymentId = req.validatedBody.paymentId || `PAY-${String(count + 1).padStart(3, '0')}`;
 
   let shopId = req.validatedBody.shop;
+  
+  if (!shopId && req.user.role === 'shopkeeper') {
+    const userDoc = await User.findById(req.user.id);
+    const sk = await Shopkeeper.findOne({ owner: userDoc.name });
+    if (sk) shopId = sk._id;
+  }
+
   if (typeof shopId === 'string' && !shopId.match(/^[0-9a-fA-F]{24}$/)) {
     const sk = await Shopkeeper.findOne({ $or: [{ name: shopId }, { owner: shopId }] });
     if (!sk) throw AppError.validation(`Shopkeeper not found: ${shopId}`);
@@ -123,13 +130,18 @@ export const createPayment = catchAsync(async (req, res) => {
       isOrderFullyPaid = totalAlreadyPaid + paidVal >= orderDoc.total;
       const newPaymentStatus = isOrderFullyPaid ? 'paid' : ((totalAlreadyPaid + paidVal > 0) ? 'partial' : 'pending');
       
+      const validStatusesToUpdate = ['pending', 'pending_approval'];
+      const newOrderStatus = (isOrderFullyPaid && validStatusesToUpdate.includes(orderDoc.status)) 
+        ? 'paid' 
+        : orderDoc.status;
+
       const updatedOrder = await Order.findOneAndUpdate(
         { _id: orderRefId, __v: orderDoc.__v },
         { 
           $set: { 
             paymentStatus: newPaymentStatus, 
             paidAmount: totalAlreadyPaid + paidVal,
-            status: isOrderFullyPaid ? 'paid' : orderDoc.status
+            status: newOrderStatus
           },
           $inc: { __v: 1 }
         },

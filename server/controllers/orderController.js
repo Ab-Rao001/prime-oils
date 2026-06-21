@@ -152,6 +152,13 @@ export const createOrder = catchAsync(async (req, res) => {
   const orderId = req.validatedBody.orderId || `ORD-${String(count + 1).padStart(3, '0')}`;
 
   let shopId = req.validatedBody.shopkeeperId || req.validatedBody.shop;
+  
+  if (!shopId && req.user.role === 'shopkeeper') {
+    const userDoc = await User.findById(req.user.id);
+    const sk = await Shopkeeper.findOne({ owner: userDoc.name });
+    if (sk) shopId = sk._id;
+  }
+
   if (typeof shopId === 'string' && !shopId.match(/^[0-9a-fA-F]{24}$/)) {
     let sk = await Shopkeeper.findOne({ $or: [{ name: shopId }, { owner: shopId }] });
     if (!sk) {
