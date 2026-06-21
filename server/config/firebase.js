@@ -25,12 +25,25 @@ if (fs.existsSync(serviceAccountPath)) {
   } catch (error) {
     logger.warn('Firebase Admin SDK could not be initialized on startup. Backend will skip Firebase sync: ' + error.message);
   }
-} else if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_PROJECT_ID || process.env.FIREBASE_SERVICE_ACCOUNT) {
+} else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    // Railway Deployment Support: Parse the JSON string from the environment variable
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+    auth = getAuth();
+    isFirebaseInitialized = true;
+    logger.info('Firebase Admin SDK initialized with FIREBASE_SERVICE_ACCOUNT env var ✓');
+  } catch (error) {
+    logger.warn('Failed to parse FIREBASE_SERVICE_ACCOUNT env var. Backend will skip Firebase sync: ' + error.message);
+  }
+} else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
   try {
     initializeApp();
     auth = getAuth();
     isFirebaseInitialized = true;
-    logger.info('Firebase Admin SDK initialized with credentials ✓');
+    logger.info('Firebase Admin SDK initialized with GOOGLE_APPLICATION_CREDENTIALS ✓');
   } catch (error) {
     logger.warn('Firebase Admin SDK could not be initialized on startup. Backend will skip Firebase sync: ' + error.message);
   }
