@@ -81,6 +81,7 @@ export default function PurchaseOrders({ role, users }) {
     try {
       const updated = await inventoryApi.receivePurchaseOrder(po._id);
       setPos(prev => prev.map(p => p._id === updated._id ? updated : p));
+      setConfirmState({ isOpen: false, po: null });
       toast.success('Inventory securely updated (Stock In)');
     } catch (err) {
       toast.error(err.message || 'Failed to receive goods');
