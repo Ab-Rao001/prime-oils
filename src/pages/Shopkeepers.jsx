@@ -229,21 +229,23 @@ export default function Shopkeepers({ role }) {
                           <Typography variant="h4" size="md" weight="bold">{s.name}</Typography>
                           <Typography variant="caption">{s.owner}</Typography>
                         </div>
-                        <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex flex-col items-end gap-2">
                           <Badge variant={s.status === 'active' ? 'success' : 'default'}>{s.status}</Badge>
-                          {['admin', 'shopkeeper', 'salesman'].includes(role) && (
-                            <Button size="xs" variant="outline" onClick={() => startEdit(s)}>Edit</Button>
-                          )}
-                          {role === 'admin' && (
-                            <Button size="xs" variant="danger" onClick={async () => {
-                                if(window.confirm('Are you sure you want to delete this shop?')) {
-                                  await userApi.deleteShopkeeper(s._id || s.id);
-                                  setShops(prev => prev.filter(x => (x._id || x.id) !== (s._id || s.id)));
-                                }
-                              }}>
-                              Delete
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {['admin', 'shopkeeper', 'salesman'].includes(role) && (
+                              <Button size="xs" variant="outline" onClick={() => startEdit(s)}>Edit</Button>
+                            )}
+                            {role === 'admin' && (
+                              <Button size="xs" variant="danger" onClick={async () => {
+                                  if(window.confirm('Are you sure you want to delete this shop?')) {
+                                    await userApi.deleteShopkeeper(s._id || s.id);
+                                    setShops(prev => prev.filter(x => (x._id || x.id) !== (s._id || s.id)));
+                                  }
+                                }}>
+                                Delete
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
 

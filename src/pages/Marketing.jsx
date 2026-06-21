@@ -150,24 +150,26 @@ export default function Marketing() {
                   <div style={ { fontSize: 11, color: C.muted }}>Sales Increase</div>
                   <div style={ { fontSize: 20, fontWeight: 700, color: C.gold }}>{c.roi || '—'}</div>
                 </div>
-                <button 
-                  onClick={() => handleSpend(c.id)}
-                  style={{
-                    background: C.goldBg, color: C.gold, border: `1px solid ${C.goldBorder}`, borderRadius: 8,
-                    padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
-                  }}
-                >
-                  Log Spend
-                </button>
-                <button 
-                  onClick={() => handleDelete(c.id)}
-                  style={{
-                    background: 'transparent', color: C.danger, border: `1px solid ${C.danger}`, borderRadius: 8,
-                    padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
-                  }}
-                >
-                  Delete
-                </button>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button 
+                    onClick={() => handleSpend(c.id)}
+                    style={{
+                      background: C.goldBg, color: C.gold, border: `1px solid ${C.goldBorder}`, borderRadius: 8,
+                      padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                    }}
+                  >
+                    Log Spend
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(c.id)}
+                    style={{
+                      background: 'transparent', color: C.danger, border: `1px solid ${C.danger}`, borderRadius: 8,
+                      padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
 
