@@ -38,7 +38,6 @@ orderSchema.index({ shop: 1, createdAt: -1 });
 orderSchema.index({ man: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 orderSchema.index({ man: 1, date: -1 }); // Compound index for salesman daily tracking
-orderSchema.index({ isDeleted: 1 }); // Index for soft deletes filtering
 
 export default mongoose.model('Order', orderSchema);
 

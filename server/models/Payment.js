@@ -14,7 +14,6 @@ const paymentSchema = new mongoose.Schema({
 // Define compound indexes for queries
 paymentSchema.index({ shop: 1, status: 1 });
 paymentSchema.index({ status: 1, createdAt: -1 });
-paymentSchema.index({ order: 1 });
 
 export default mongoose.model('Payment', paymentSchema);
 

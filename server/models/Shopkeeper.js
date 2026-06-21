@@ -22,8 +22,6 @@ const shopkeeperSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Define indexes for scalability
-shopkeeperSchema.index({ name: 1 });
-shopkeeperSchema.index({ salesman: 1 });
 shopkeeperSchema.index({ location: '2dsphere' });
 
 export default mongoose.model('Shopkeeper', shopkeeperSchema);
