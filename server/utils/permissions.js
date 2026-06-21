@@ -34,7 +34,8 @@ export const permissions = {
     'dispatch.driver', // can accept driving tasks
     'catalog.read',
     'returns.read',
-    'returns.create'
+    'returns.create',
+    'reports.read'
   ],
   driver: [ // Added a driver role in case it's distinct
     'dispatch.read',
@@ -52,7 +53,8 @@ export const permissions = {
     'customers.read',
     'returns.read',
     'returns.create',
-    'dispatch.read'
+    'dispatch.read',
+    'reports.read'
   ]
 };
 
