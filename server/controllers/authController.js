@@ -32,34 +32,20 @@ export const login = catchAsync(async (req, res) => {
     }
 
     // Correlated Firebase verification
-    if (isFirebaseInitialized && process.env.FIREBASE_WEB_API_KEY) {
+    if (isFirebaseInitialized && auth) {
       try {
-        const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_WEB_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, returnSecureToken: true })
-        });
-        const fbData = await fbRes.json();
-        if (!fbRes.ok || fbData.error) {
-          // If the user doesn't exist in Firebase but exists in MongoDB, we migrate them.
-          // Note: Firebase uses INVALID_LOGIN_CREDENTIALS for both missing emails and wrong passwords now to prevent enumeration
-          if (fbData.error && (fbData.error.message === 'EMAIL_NOT_FOUND' || fbData.error.message === 'INVALID_LOGIN_CREDENTIALS')) {
-            // Wait for MongoDB password verification below. If it succeeds, we'll create the Firebase account.
-            req.needsFirebaseMigration = true;
-          } else {
-            await AuditService.log({
-              user: user._id,
-              action: 'FAILED_LOGIN_FIREBASE',
-              collectionName: 'User',
-              documentId: user._id,
-              ipAddress: req.ip
-            });
-            throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
-          }
+        const fbUser = await auth.getUserByEmail(email.toLowerCase());
+        
+        if (!user.firebaseUid) {
+          user.firebaseUid = fbUser.uid;
+          await user.save();
         }
       } catch (err) {
-        if (err instanceof AppError) throw err;
-        console.error('Firebase Auth REST Error:', err);
+        if (err.code === 'auth/user-not-found') {
+          req.needsFirebaseMigration = true;
+        } else {
+          console.error('Firebase Admin SDK Error:', err);
+        }
       }
     }
 
