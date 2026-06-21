@@ -172,9 +172,11 @@ export const createOrder = catchAsync(async (req, res) => {
   }
 
   let manId = req.validatedBody.man;
+  if (manId === '') manId = undefined;
   if (typeof manId === 'string' && !manId.match(/^[0-9a-fA-F]{24}$/)) {
     const u = await User.findOne({ name: manId });
     if (u) manId = u._id;
+    else manId = undefined;
   }
 
   // FORCE salesman to their own ID
