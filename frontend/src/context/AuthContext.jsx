@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { authApi } from '../api/authApi';
+import { queryClient } from '../App';
 
 export const AuthContext = createContext();
 
@@ -33,6 +34,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setUserRole(null);
       setError('Session expired. Please log in again.');
+      queryClient.clear(); // Clear cached data on forced logout
     };
     window.addEventListener('auth:logout', handleForceLogout);
     return () => window.removeEventListener('auth:logout', handleForceLogout);
@@ -41,6 +43,7 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback(async (email, password) => {
     setError('');
     try {
+      queryClient.clear(); // Clear any stale cache from previous sessions
       const data = await authApi.loginLocal(email, password);
       setUser(data.user);
       setUserRole(data.user.role);
@@ -54,6 +57,7 @@ export const AuthProvider = ({ children }) => {
   const signup = useCallback(async (name, email, password, confirmPassword, role) => {
     setError('');
     try {
+      queryClient.clear(); // Clear any stale cache from previous sessions
       const data = await authApi.signupLocal(name, email, password, confirmPassword, role);
       setUser(data.user);
       setUserRole(data.user.role);
@@ -74,6 +78,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setUserRole(null);
     setError('');
+    queryClient.clear(); // Clear all cached data!
   }, []);
 
   const value = useMemo(() => ({
