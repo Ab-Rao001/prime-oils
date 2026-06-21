@@ -35,7 +35,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "cross-env CI=false react-scripts build",
     "server": "npm run dev --prefix server",
     "server:seed": "npm run seed --prefix server",
     "test": "npm test --prefix server",
@@ -50,6 +50,7 @@
     "@types/node": "^26.0.0",
     "autoprefixer": "^10.5.0",
     "concurrently": "^9.1.2",
+    "cross-env": "^10.1.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "http-proxy-middleware": "^4.1.1",
     "postcss": "^8.5.15",
