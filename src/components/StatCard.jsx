@@ -17,14 +17,14 @@ export default function StatCard({ label, value, sub, colorClass = 'text-gold bg
     : colorClass;
 
   return (
-    <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4 flex gap-3.5 items-center">
+    <div className="bg-card border border-border dark:border-border-dark rounded-xl p-5 flex flex-col gap-3">
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-2xl ${finalColorClass}`}>
         {icon}
       </div>
       <div>
-        <Typography variant="caption" className="text-muted-foreground mb-0.5 block">{label}</Typography>
-        <Typography variant="h3" size="xl" className="font-bold text-foreground">{value}</Typography>
-        {sub && <Typography variant="caption" className="text-muted-foreground mt-0.5 block">{sub}</Typography>}
+        <Typography variant="caption" className="text-muted-foreground mb-1 block uppercase tracking-wider font-semibold">{label}</Typography>
+        <Typography variant="h3" size="2xl" className="font-extrabold text-foreground">{value}</Typography>
+        {sub && <Typography variant="caption" className="text-muted-foreground mt-1 block">{sub}</Typography>}
       </div>
     </div>
   );

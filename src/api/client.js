@@ -67,6 +67,7 @@ export async function request(path, options = {}, retries = 1) {
       headers,
       signal: controller.signal,
       credentials: 'include',
+      cache: 'no-store',
       ...options,
     });
     
