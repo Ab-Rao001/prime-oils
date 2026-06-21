@@ -23,6 +23,7 @@ export default function Payments({ role, user, onSendNotification }) {
   const { data: pays, setData: setPays, loading, error } = useFetch(() => paymentApi.getPayments(), []);
   const { data: orders } = useFetch(() => orderApi.getOrders(), []);
   const [modal, setModal] = useState(null);
+  const [receipt, setReceipt] = useState(null);
 
   const { register, handleSubmit, formState: { errors, isSubmitting: saving }, reset } = useForm({
     resolver: zodResolver(paymentSchema),
@@ -52,12 +53,21 @@ export default function Payments({ role, user, onSendNotification }) {
       const updated = await paymentApi.updatePayment(modal, { paid: newPaid, status });
       setPays(prev => prev.map(x => x.id === modal ? updated : x));
       onSendNotification?.({ type: 'payment', msg: `Payment of PKR ${add.toLocaleString()} recorded for ${p.shop}` });
+      setModal(null);
+      // Show Receipt Transcript
+      setReceipt({
+        id: updated.id,
+        shop: p.shop,
+        amountPaid: add,
+        totalDueBefore: Math.max(0, p.total - (p.paid || 0)),
+        totalDueAfter: Math.max(0, updated.total - updated.paid),
+        date: new Date().toLocaleString(),
+      });
       toast.success('Payment recorded successfully');
     } catch (err) {
       toast.error(err.message || 'Failed to record payment');
-      // Optimistic rollback not needed if we just show error
+      setModal(null);
     }
-    setModal(null);
   };
 
   const columns = useMemo(() => [
@@ -135,6 +145,53 @@ export default function Payments({ role, user, onSendNotification }) {
             </Button>
           </div>
         </form>
+      </EnterpriseModal>
+
+      <EnterpriseModal
+        isOpen={!!receipt}
+        onClose={() => setReceipt(null)}
+        title="Payment Transcript"
+        size="md"
+      >
+        {receipt && (
+          <div className="space-y-4 font-mono text-sm p-4 bg-black/20 rounded-lg border border-gold/20">
+            <div className="text-center pb-4 border-b border-gold/20">
+              <Typography variant="h4" className="text-gold uppercase tracking-widest">Official Receipt</Typography>
+              <Typography variant="caption" className="text-gold/60">{receipt.date}</Typography>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-white/60">Payment ID:</span>
+                <span className="text-white font-bold">{receipt.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Account:</span>
+                <span className="text-white font-bold">{receipt.shop}</span>
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 pt-4 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-white/60">Previous Balance:</span>
+                <span className="text-white">PKR {receipt.totalDueBefore.toLocaleString('en-PK')}</span>
+              </div>
+              <div className="flex justify-between text-lg text-success">
+                <span>Amount Paid:</span>
+                <span className="font-bold">- PKR {receipt.amountPaid.toLocaleString('en-PK')}</span>
+              </div>
+              <div className="flex justify-between font-bold pt-2 border-t border-white/10">
+                <span className="text-white">New Outstanding:</span>
+                <span className="text-warn">PKR {receipt.totalDueAfter.toLocaleString('en-PK')}</span>
+              </div>
+            </div>
+
+            <div className="pt-4 flex gap-2">
+              <Button className="flex-1" onClick={() => setReceipt(null)}>Close</Button>
+              <Button variant="outline" className="flex-1" onClick={() => window.print()}>Print Receipt</Button>
+            </div>
+          </div>
+        )}
       </EnterpriseModal>
     </div>
   );

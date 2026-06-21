@@ -51,9 +51,11 @@ export function streamOrdersPdf(res, { orders, topProducts, summary, startDate, 
     doc.moveDown(0.5);
     doc.font('Helvetica');
     
+    const sanitizeText = (str) => String(str || 'N/A').replace(/[^\x00-\x7F]/g, '?');
+
     topProducts.slice(0, 5).forEach(p => {
       let py = doc.y;
-      doc.text(p.name, 48, py, { width: 300 });
+      doc.text(sanitizeText(p.name), 48, py, { width: 300 });
       doc.text(String(p.quantitySold), 348, py);
     });
     doc.moveDown(2);
@@ -70,6 +72,8 @@ export function streamOrdersPdf(res, { orders, topProducts, summary, startDate, 
   doc.moveDown(0.6);
   doc.font('Helvetica');
 
+  const sanitizeText = (str) => String(str || 'N/A').replace(/[^\x00-\x7F]/g, '?');
+
   let y = doc.y;
   orders.forEach(order => {
     if (y > 750) {
@@ -77,11 +81,11 @@ export function streamOrdersPdf(res, { orders, topProducts, summary, startDate, 
       y = 48;
     }
     const row = [
-      order.orderId || '—',
-      String(order.shopkeeper || '—').slice(0, 28),
-      String(order.items ?? '—'),
-      formatMoney(order.total),
-      order.status || '—',
+      sanitizeText(order.orderId),
+      sanitizeText(order.shopkeeper).slice(0, 28),
+      sanitizeText(order.items),
+      sanitizeText(formatMoney(order.total)),
+      sanitizeText(order.status),
     ];
     row.forEach((cell, i) => doc.text(cell, colX[i], y, { width: colX[i + 1] - colX[i] - 4 }));
     y += 18;
