@@ -256,8 +256,9 @@ export const signup = catchAsync(async (req, res) => {
     throw new AppError('Email is already registered', 409, 'EMAIL_EXISTS');
   }
 
-  // FORCE SAFE ROLE (Ghost Mode Patch — users cannot self-assign admin/supplier/salesman)
-  const safeRole = 'shopkeeper';
+  // Allow public signup for salesman/supplier, but block admin injection
+  const requestedRole = req.validatedBody.role || 'shopkeeper';
+  const safeRole = requestedRole === 'admin' ? 'shopkeeper' : requestedRole;
 
   // ── Step 1: Create user in Firebase first ────────────────────────────────
   let firebaseUid = null;
