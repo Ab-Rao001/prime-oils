@@ -27,7 +27,6 @@ export default function Dispatch({ role, users }) {
   const { data: dispatches, setData: setDispatches, loading: loadingD } = useFetch(() => dispatchApi.getDispatches(), []);
   const { data: vehicles, setData: setVehicles, loading: loadingV } = useFetch(() => dispatchApi.getVehicles(), []);
   const { data: orders = [], isPending: loadingO } = useOrders({ status: 'ready_for_dispatch' });
-  const { data: fetchedUsers } = useFetch(() => userApi.getUsers(), []);
   
   const [showModal, setShowModal] = useState(false);
   const [podDispatch, setPodDispatch] = useState(null);
@@ -42,10 +41,7 @@ export default function Dispatch({ role, users }) {
     defaultValues: { plateNumber: '', model: '', capacity: '' }
   });
 
-  const suppliers = useMemo(() => {
-    const all = (users && users.length > 0) ? users : (fetchedUsers || []);
-    return all.filter(u => u.role === 'supplier');
-  }, [users, fetchedUsers]);
+
 
   const pendingOrders = useMemo(() => {
     const ordersArray = Array.isArray(orders) ? orders : [];

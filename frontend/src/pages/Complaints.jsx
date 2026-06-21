@@ -37,8 +37,8 @@ export default function Complaints({ role, user }) {
   const [convertTarget, setConvertTarget] = useState(null);
   const { mutate: convertToReturn, isPending: converting } = useConvertComplaintToReturn();
 
-  const { data: usersData } = useFetch(() => userApi.getUsers(), []);
-  const staff = (usersData?.data || []).filter(u => ['salesman', 'supplier'].includes(u.role));
+  const { data: usersData } = useFetch(() => userApi.getSalesmen(), []);
+  const staff = (usersData?.data || []).filter(u => u.role === 'salesman');
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm({
     resolver: zodResolver(complaintSchema),
