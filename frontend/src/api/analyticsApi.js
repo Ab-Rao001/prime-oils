@@ -12,10 +12,15 @@ export const analyticsApi = {
 
   downloadReportExport: async ({ startDate, endDate, format }) => {
     const url = `${API_BASE}${buildUrl('/reports/orders/export', { startDate, endDate, format })}`;
-    const res = await fetch(url, { credentials: 'include' });
+    const headers = {};
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const res = await fetch(url, { credentials: 'include', headers });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || 'Export failed');
+      throw new Error(data?.error?.message || data.message || res.statusText || 'Export failed');
     }
     const blob = await res.blob();
     const ext = format === 'pdf' ? 'pdf' : 'xlsx';
