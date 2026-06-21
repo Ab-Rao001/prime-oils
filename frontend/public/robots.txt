@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://prime-oils.vercel.app/sitemap.xml
