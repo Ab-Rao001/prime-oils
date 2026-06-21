@@ -179,7 +179,7 @@ export default function Reports({ role }) {
           </div>
 
           <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5 mb-5 max-md:grid-cols-1">
-            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-5">
               <Typography variant="body" weight="semibold" className="text-foreground mb-3.5 block">
                 {role === 'shopkeeper' ? 'Spend by week' : 'Revenue by week'}
               </Typography>
@@ -200,7 +200,7 @@ export default function Reports({ role }) {
               )}
             </div>
 
-            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-5">
               <Typography variant="body" weight="semibold" className="text-foreground mb-3.5 block">
                 Orders by status
               </Typography>
@@ -234,7 +234,7 @@ export default function Reports({ role }) {
           </div>
 
           <div className="bg-card border border-border dark:border-border-dark rounded-xl overflow-hidden">
-            <div className="py-4 px-4.5 border-b border-border dark:border-border-dark">
+            <div className="py-4 px-5 border-b border-border dark:border-border-dark">
               <Typography variant="body" weight="semibold" className="text-foreground block">Top products (quantity sold)</Typography>
             </div>
             {summary.topProducts?.length > 0 ? (

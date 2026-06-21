@@ -245,7 +245,7 @@ const DataGrid = ({
                           className={`p-3 text-[13px] text-foreground flex items-center min-w-0 ${!col.wrap ? 'overflow-hidden text-ellipsis whitespace-nowrap' : 'break-words'}`}
                           role="gridcell"
                         >
-                          {col.cell ? col.cell(row) : <span className="truncate w-full">{row[col.accessorKey]}</span>}
+                          {col.cell ? col.cell(row, virtualRow.index) : <span className="truncate w-full">{row[col.accessorKey]}</span>}
                         </div>
                       ))}
                     </>
