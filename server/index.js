@@ -58,7 +58,6 @@ app.use((req, res, next) => {
   if (req.url.includes('//')) {
     req.url = req.url.replace(/\/\/+/g, '/');
     req.originalUrl = req.originalUrl.replace(/\/\/+/g, '/');
-    req.path = req.path.replace(/\/\/+/g, '/');
   }
   next();
 });
