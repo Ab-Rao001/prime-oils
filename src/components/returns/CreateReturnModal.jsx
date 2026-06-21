@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { EnterpriseModal, Typography, Button, Select, Input } from '../ui';
 import { RETURN_REASONS, RESOLUTION_TYPES } from '../../api/returnApi';
+import { useQuery } from '@tanstack/react-query';
+import { orderApi } from '../../api/orderApi';
 
 export default function CreateReturnModal({
   isOpen,
@@ -26,6 +28,12 @@ export default function CreateReturnModal({
     [eligibleOrders, orderId]
   );
 
+  const { data: fullOrder, isLoading: isLoadingOrder } = useQuery({
+    queryKey: ['order', orderId],
+    queryFn: () => orderApi.getOrder(orderId),
+    enabled: !!orderId && isOpen,
+  });
+
   useEffect(() => {
     if (!isOpen) return;
     setOrderId(defaultOrderId || '');
@@ -36,16 +44,16 @@ export default function CreateReturnModal({
   }, [isOpen, defaultOrderId]);
 
   useEffect(() => {
-    if (!selectedOrder?.lineItems) {
+    if (!fullOrder?.lineItems) {
       setQuantities({});
       return;
     }
     const initial = {};
-    selectedOrder.lineItems.forEach(li => {
+    fullOrder.lineItems.forEach(li => {
       initial[li.productId] = li.quantity;
     });
     setQuantities(initial);
-  }, [selectedOrder]);
+  }, [fullOrder]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -83,13 +91,15 @@ export default function CreateReturnModal({
           ))}
         </Select>
 
-        {selectedOrder?.lineItems?.length > 0 && (
+        {isLoadingOrder ? (
+          <Typography variant="body" className="text-muted-foreground">Loading order details...</Typography>
+        ) : fullOrder?.lineItems?.length > 0 ? (
           <div>
             <Typography variant="caption" className="text-muted-foreground uppercase font-bold block mb-2">
               Products to Return
             </Typography>
             <div className="border border-border dark:border-border-dark rounded-lg divide-y divide-border dark:divide-border-dark">
-              {selectedOrder.lineItems.map(li => (
+              {fullOrder.lineItems.map(li => (
                 <div key={li.productId} className="flex items-center justify-between p-3 gap-3">
                   <div>
                     <Typography variant="body" weight="semibold">{li.productName}</Typography>
@@ -112,6 +122,8 @@ export default function CreateReturnModal({
               ))}
             </div>
           </div>
+        ) : selectedOrder && (
+          <Typography variant="body" className="text-danger">Failed to load line items.</Typography>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -134,7 +146,7 @@ export default function CreateReturnModal({
           <Button type="button" variant="outline" onClick={onClose} className="flex-1" disabled={isLoading}>
             Cancel
           </Button>
-          <Button type="submit" className="flex-1" isLoading={isLoading} disabled={!selectedOrder}>
+          <Button type="submit" className="flex-1" isLoading={isLoading} disabled={!selectedOrder || isLoadingOrder || !fullOrder?.lineItems}>
             Submit Return Request
           </Button>
         </div>
