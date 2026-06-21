@@ -20,6 +20,7 @@ import NotificationService from '../services/NotificationService.js';
 const ALLOWED_TRANSITIONS = {
   pending: {
     supplier: ['confirmed', 'cancelled'],
+    salesman: ['confirmed', 'cancelled'],
     admin: ['confirmed', 'cancelled', 'ready_for_dispatch'],
   },
   pending_approval: {
@@ -292,7 +293,14 @@ export const createOrder = catchAsync(async (req, res) => {
             user: req.user.id
         }));
         if (stockMovements.length > 0) {
-            await StockService.bulkMoveStock(stockMovements, session);
+            try {
+                await StockService.bulkMoveStock(stockMovements, session);
+            } catch (err) {
+                if (err.statusCode === 409 || (err.message && err.message.includes('Insufficient stock'))) {
+                    throw AppError.validation(err.message);
+                }
+                throw err;
+            }
         }
     }
 
@@ -436,7 +444,14 @@ export const updateOrder = catchAsync(async (req, res) => {
       }
 
       if (newMovements.length > 0) {
-        await StockService.bulkMoveStock(newMovements, session);
+        try {
+          await StockService.bulkMoveStock(newMovements, session);
+        } catch (err) {
+          if (err.statusCode === 409 || (err.message && err.message.includes('Insufficient stock'))) {
+            throw AppError.validation(err.message);
+          }
+          throw err;
+        }
       }
       
       const totalCogs = lineItems.reduce((acc, i) => acc + i.totalCost, 0);
@@ -524,9 +539,16 @@ export const updateOrderStatus = catchAsync(async (req, res) => {
     return res.json(formatOrder(order));
   }
 
+  if (currentStatus === 'cancelled') {
+    throw AppError.validation('Cannot change status of a cancelled order');
+  }
+  if (currentStatus === 'delivered' && status !== 'return_requested') {
+    throw AppError.validation('Cannot change status of a delivered order');
+  }
+
   const roleAllowed = ALLOWED_TRANSITIONS[currentStatus]?.[req.user.role];
   if (!roleAllowed || !roleAllowed.includes(status)) {
-    throw AppError.forbidden(`Role '${req.user.role}' cannot transition order from '${currentStatus}' to '${status}'`);
+    throw AppError.validation(`Invalid status transition from '${currentStatus}' to '${status}'`);
   }
 
   await runInTransaction(async (session) => {

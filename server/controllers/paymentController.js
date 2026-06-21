@@ -78,6 +78,7 @@ export const getPayment = catchAsync(async (req, res) => {
 });
 
 export const createPayment = catchAsync(async (req, res) => {
+  const scope = await buildPaymentScope(req.user);
   const count = await Payment.countDocuments();
   const paymentId = req.validatedBody.paymentId || `PAY-${String(count + 1).padStart(3, '0')}`;
 
@@ -125,7 +126,11 @@ export const createPayment = catchAsync(async (req, res) => {
       const updatedOrder = await Order.findOneAndUpdate(
         { _id: orderRefId, __v: orderDoc.__v },
         { 
-          $set: { paymentStatus: newPaymentStatus, paidAmount: totalAlreadyPaid + paidVal },
+          $set: { 
+            paymentStatus: newPaymentStatus, 
+            paidAmount: totalAlreadyPaid + paidVal,
+            status: isOrderFullyPaid ? 'paid' : orderDoc.status
+          },
           $inc: { __v: 1 }
         },
         { new: true, session }
@@ -217,7 +222,11 @@ export const updatePayment = catchAsync(async (req, res) => {
       const updatedOrder = await Order.findOneAndUpdate(
         { _id: orderId, __v: orderDoc.__v },
         { 
-          $set: { paymentStatus: newPaymentStatus, paidAmount: otherPaidSum + paidVal },
+          $set: { 
+            paymentStatus: newPaymentStatus, 
+            paidAmount: otherPaidSum + paidVal,
+            status: isOrderFullyPaid ? 'paid' : orderDoc.status
+          },
           $inc: { __v: 1 }
         },
         { new: true, session }
@@ -314,7 +323,11 @@ export const payOrder = catchAsync(async (req, res) => {
     const updatedOrder = await Order.findOneAndUpdate(
       { _id: orderDoc._id, __v: orderDoc.__v },
       { 
-        $set: { paymentStatus: newStatus, paidAmount: newPaidAmount },
+        $set: { 
+          paymentStatus: newStatus, 
+          paidAmount: newPaidAmount,
+          status: newStatus === 'paid' ? 'paid' : orderDoc.status
+        },
         $inc: { __v: 1 }
       },
       { new: true, session }

@@ -17,8 +17,10 @@ export function validate(schema) {
           message: err.message
         }));
         
+        const message = errors.map(err => `${err.field}: ${err.message}`).join(', ') || 'Validation failed';
         return res.status(400).json({
           success: false,
+          message,
           errors
         });
       }

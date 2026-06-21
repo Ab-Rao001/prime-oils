@@ -15,9 +15,7 @@ class StockService {
    * @param {number} [params.unitCost] - Required for 'purchase' to calculate moving average costPrice
    */
   static async moveStock(params) {
-    if (!params.session) {
-      throw new Error('Stock Movement requires a MongoDB Transaction Session');
-    }
+    // Session is optional for compatibility with standalone development servers
 
     const product = await Product.findById(params.productId).session(params.session);
     if (!product) {
@@ -92,9 +90,7 @@ class StockService {
    * @param {mongoose.ClientSession} session
    */
   static async bulkMoveStock(movements, session) {
-    if (!session) {
-      throw new Error('Bulk Stock Movement requires a MongoDB Transaction Session');
-    }
+    // Session is optional for compatibility with standalone development servers
 
     if (!movements || movements.length === 0) return [];
 

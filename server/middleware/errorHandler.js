@@ -50,6 +50,8 @@ export function errorHandler(err, req, res, next) {
   // JWT-specific errors get a generic message (don't leak token details)
   if (err.name === 'UnauthorizedError' || err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
     return res.status(401).json({
+      success: false,
+      code: 'UNAUTHORIZED',
       status: 'fail',
       message: 'Authentication required'
     });
@@ -57,6 +59,8 @@ export function errorHandler(err, req, res, next) {
   // AppError 401s (e.g. INVALID_CREDENTIALS) pass their real message through to the client
   if (error.statusCode === 401) {
     return res.status(401).json({
+      success: false,
+      code: error.code || 'UNAUTHORIZED',
       status: 'fail',
       message: error.message || 'Authentication required'
     });
@@ -64,20 +68,26 @@ export function errorHandler(err, req, res, next) {
 
   if (error.statusCode === 403) {
     return res.status(403).json({
+      success: false,
+      code: error.code || 'FORBIDDEN',
       status: 'fail',
-      message: 'Access denied'
+      message: error.message || 'Access denied'
     });
   }
 
   if (error.statusCode === 404) {
     return res.status(404).json({
+      success: false,
+      code: error.code || 'NOT_FOUND',
       status: 'fail',
-      message: 'Resource not found'
+      message: error.message || 'Resource not found'
     });
   }
 
   if (error.statusCode === 400 || error.statusCode === 422 || error.statusCode === 409) {
     return res.status(error.statusCode).json({
+      success: false,
+      code: error.code || 'VALIDATION_ERROR',
       status: 'fail',
       message: error.message || 'Invalid request'
     });
@@ -85,6 +95,8 @@ export function errorHandler(err, req, res, next) {
 
   if (error.statusCode === 429) {
     return res.status(429).json({
+      success: false,
+      code: 'TOO_MANY_REQUESTS',
       status: 'error',
       message: 'Too many requests. Please try again later.'
     });
@@ -93,8 +105,10 @@ export function errorHandler(err, req, res, next) {
   // 4. Construct and send standard 500 response
   // We explicitly log full details above, but NEVER expose them to the client
   res.status(500).json({
+    success: false,
+    code: error.code || 'INTERNAL_ERROR',
     status: 'error',
-    message: 'An unexpected server error occurred'
+    message: error.message || 'An unexpected server error occurred'
   });
 }
 

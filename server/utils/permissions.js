@@ -27,6 +27,7 @@ export const permissions = {
     'orders.create',
     'orders.read',
     'orders.manage', // specifically for salesman adjustments
+    'orders.approve',
     'payments.collect',
     'payments.read',
     'complaints.create',

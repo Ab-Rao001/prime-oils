@@ -42,5 +42,21 @@ export const updateOrderSchema = z.object({
 });
 
 export const updateOrderStatusSchema = z.object({
-  status: z.enum(['pending', 'pending_approval', 'paid', 'confirmed', 'ready_for_dispatch', 'in_transit', 'partially_delivered', 'delivered', 'return_requested', 'returned', 'cancelled'], { required_error: 'Status is required' }),
+  status: z.any().optional()
+}).superRefine((data, ctx) => {
+  if (!data.status) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Status is required',
+      path: ['status']
+    });
+    return;
+  }
+  if (!['pending', 'pending_approval', 'paid', 'confirmed', 'ready_for_dispatch', 'in_transit', 'partially_delivered', 'delivered', 'return_requested', 'returned', 'cancelled'].includes(data.status)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Invalid status',
+      path: ['status']
+    });
+  }
 });

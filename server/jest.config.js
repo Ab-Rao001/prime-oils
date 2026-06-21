@@ -20,5 +20,9 @@ export default {
       statements: 70,
     },
   },
+  moduleNameMapper: {
+    '^firebase-admin/app$': '<rootDir>/tests/mocks/firebaseAdminApp.js',
+    '^firebase-admin/auth$': '<rootDir>/tests/mocks/firebaseAdminAuth.js',
+  },
   transform: {},
 };
