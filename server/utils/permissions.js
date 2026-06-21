@@ -44,14 +44,14 @@ export const permissions = {
   ],
   shopkeeper: [
     'catalog.read',
-    'orders.create.self',
+    'orders.create',
     'orders.read',
     'payments.read',
     'payments.pay',
-    'complaints.create.self',
-    'customers.read.self', // Shopkeeper reads their own shop info
+    'complaints.create',
+    'customers.read',
     'returns.read',
-    'returns.create.self',
+    'returns.create',
     'dispatch.read'
   ]
 };
