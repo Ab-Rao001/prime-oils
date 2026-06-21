@@ -81,6 +81,12 @@ export async function request(path, options = {}, retries = 1) {
     
     // Auto-refresh token on 401
     if (res.status === 401 && !path.includes('/auth/login') && retries > 0) {
+      const currentRefreshToken = localStorage.getItem('refreshToken');
+      if (!currentRefreshToken) {
+        window.dispatchEvent(new CustomEvent('auth:logout'));
+        throw new Error('No valid session found. Please log in.');
+      }
+      
       if (!isRefreshing) {
         isRefreshing = true;
         try {
