@@ -50,7 +50,7 @@ export const verifyShopOwnership = async (req, res, next) => {
          shop = await Shopkeeper.findOne({ $or: [{ name: shopId }, { owner: shopId }] });
        }
        
-       if (!shop || shop.owner !== userDoc.name) {
+       if (!shop || (shop.owner !== userDoc.name && shop.name !== userDoc.name)) {
            return next(new AppError('Forbidden: You cannot act for another shop', 403));
        }
     }

@@ -31,6 +31,7 @@ export const permissions = {
     'payments.collect',
     'payments.read',
     'complaints.create',
+    'complaints.read',
     'visits.manage',
     'dispatch.read',
     'dispatch.driver', // can accept driving tasks
@@ -51,6 +52,7 @@ export const permissions = {
     'payments.read',
     'payments.pay',
     'complaints.create',
+    'complaints.read',
     'customers.read',
     'returns.read',
     'returns.create',

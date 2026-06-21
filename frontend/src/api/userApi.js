@@ -1,21 +1,33 @@
 import { request, buildUrl, uploadWithProgress } from './client';
 
 export const userApi = {
-  getShopkeepers: params => request(buildUrl('/shopkeepers', params)),
+  getShopkeepers: async params => {
+    const res = await request(buildUrl('/shopkeepers', params));
+    return res.data || res;
+  },
   createShopkeeper: body => request('/shopkeepers', { method: 'POST', body: JSON.stringify(body) }),
   updateShopkeeper: (id, body) => request(`/shopkeepers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteShopkeeper: id => request(`/shopkeepers/${id}`, { method: 'DELETE' }),
 
-  getComplaints: params => request(buildUrl('/complaints', params)),
+  getComplaints: async params => {
+    const res = await request(buildUrl('/complaints', params));
+    return res.data || res;
+  },
   createComplaint: body => request('/complaints', { method: 'POST', body: JSON.stringify(body) }),
   updateComplaint: (id, body) => request(`/complaints/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
-  getNotifications: params => request(buildUrl('/notifications', params)),
+  getNotifications: async params => {
+    const res = await request(buildUrl('/notifications', params));
+    return res.data || res;
+  },
   createNotification: body => request('/notifications', { method: 'POST', body: JSON.stringify(body) }),
   markNotificationRead: id => request(`/notifications/${id}/read`, { method: 'PATCH' }),
   markAllNotificationsRead: () => request('/notifications/mark-all-read', { method: 'POST' }),
 
-  getCampaigns: params => request(buildUrl('/campaigns', params)),
+  getCampaigns: async params => {
+    const res = await request(buildUrl('/campaigns', params));
+    return res.data || res;
+  },
   createCampaign: body => request('/campaigns', { method: 'POST', body: JSON.stringify(body) }),
   deleteCampaign: id => request(`/campaigns/${id}`, { method: 'DELETE' }),
   logCampaignSpend: (id, payload) => request(`/campaigns/${id}/spend`, { method: 'POST', body: JSON.stringify(payload) }),
