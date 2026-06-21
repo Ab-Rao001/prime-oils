@@ -15,16 +15,14 @@ export const getProducts = catchAsync(async (req, res) => {
   const cat = req.query.cat || '';
   const sort = getSafeSort(req.query.sort, ['createdAt', 'name', 'price', 'cat', 'sku', 'stock'], { createdAt: -1 });
 
-  const cacheKey = `products:list:page:${page}:limit:${limit}:q:${q}:cat:${cat}:sort:${JSON.stringify(sort)}`;
+  const scopeSuffix = req.user && req.user.role === 'supplier' ? `supplier:${req.user.id}` : 'global';
+  const cacheKey = `products:list:page:${page}:limit:${limit}:q:${q}:cat:${cat}:sort:${JSON.stringify(sort)}:scope:${scopeSuffix}`;
   const cachedData = await cache.get(cacheKey);
   if (cachedData) {
     return res.json(cachedData);
   }
 
   const filter = { isActive: true, isDeleted: { $ne: true } };
-  if (req.user && req.user.role === 'supplier') {
-    filter.supplier = req.user.id;
-  }
   
   if (q) {
     filter.$text = { $search: q };

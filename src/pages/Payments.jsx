@@ -62,15 +62,15 @@ export default function Payments({ role, user, onSendNotification }) {
   const columns = useMemo(() => [
     { header: 'ID', accessorKey: 'id', sortable: true, cell: (p) => <Typography variant="body" weight="semibold">{p.id}</Typography> },
     { header: 'Shop', accessorKey: 'shop', sortable: true },
-    { header: 'Total', accessorKey: 'total', sortable: true, cell: (p) => `PKR ${(p.total || 0).toLocaleString()}` },
-    { header: 'Paid', accessorKey: 'paid', sortable: true, cell: (p) => `PKR ${(p.paid || 0).toLocaleString()}` },
+    { header: 'Total', accessorKey: 'total', sortable: true, cell: (p) => `PKR ${(p.total || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+    { header: 'Paid', accessorKey: 'paid', sortable: true, cell: (p) => `PKR ${(p.paid || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
     { 
       header: 'Due', 
       accessorKey: 'due', 
       sortable: true, 
       cell: (p) => {
         const due = Math.max(0, (p.total || 0) - (p.paid || 0));
-        return <Typography variant="body" weight="semibold" className={due > 0 ? 'text-danger' : 'text-success'}>PKR {due.toLocaleString()}</Typography>;
+        return <Typography variant="body" weight="semibold" className={due > 0 ? 'text-danger' : 'text-success'}>PKR {due.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>;
       }
     },
     { header: 'Type', accessorKey: 'type', sortable: true },
@@ -96,8 +96,8 @@ export default function Payments({ role, user, onSendNotification }) {
       <ApiError error={error} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
-        <StatCard icon="💰" label={role === 'salesman' ? 'Period Collection' : 'Collected'} value={`PKR ${totalPaid.toLocaleString()}`} color={C.success} />
-        <StatCard icon="⏳" label={role === 'salesman' ? 'Amount Due in Market' : 'Outstanding'} value={`PKR ${totalDue.toLocaleString()}`} color={C.warn} />
+        <StatCard icon="💰" label={role === 'salesman' ? 'Period Collection' : 'Collected'} value={`PKR ${totalPaid.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color={C.success} />
+        <StatCard icon="⏳" label={role === 'salesman' ? 'Amount Due in Market' : 'Outstanding'} value={`PKR ${totalDue.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color={C.warn} />
         <StatCard icon="📋" label="Accounts" value={String(visiblePays.length)} />
       </div>
 

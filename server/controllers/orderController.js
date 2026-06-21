@@ -65,9 +65,8 @@ const buildOrderScope = async (user) => {
   } else if (user.role === 'salesman') {
     filter.man = user.id;
   } else if (user.role === 'supplier') {
-    // Orders contain line items which contain products. We need to find orders that have products belonging to this supplier.
-    const products = await Product.find({ supplier: user.id }).select('_id');
-    filter['lineItems.productId'] = { $in: products.map(p => p._id) };
+    // Supplier sees all orders for now
+    // If multi-supplier strict isolation is needed later, this can be reverted.
   }
   return filter;
 };

@@ -8,6 +8,7 @@ import { Typography, Badge } from './ui';
 import { useQuery } from '@tanstack/react-query';
 import { userApi } from '../api/userApi';
 import { orderApi } from '../api/orderApi';
+import { paymentApi } from '../api/paymentApi';
 
 export default function Sidebar({ onLogout }) {
   const { user } = useAuth();
@@ -44,12 +45,34 @@ export default function Sidebar({ onLogout }) {
     enabled: user?.role === 'admin' || user?.role === 'supplier'
   });
 
+  const { data: pendingOrdersData } = useQuery({
+    queryKey: ['orders', { status: 'pending' }],
+    queryFn: () => orderApi.getOrders({ status: 'pending' }),
+    enabled: true,
+    refetchInterval: 30000
+  });
+
+  const { data: paymentsData } = useQuery({
+    queryKey: ['payments'],
+    queryFn: () => paymentApi.getPayments(),
+    enabled: user?.role === 'shopkeeper' || user?.role === 'salesman' || user?.role === 'admin',
+    refetchInterval: 30000
+  });
+
   const openComplaints = Array.isArray(complaintsData?.data || complaintsData) 
     ? (complaintsData?.data || complaintsData).filter(c => c.status === 'pending' || c.status === 'processing').length 
     : 0;
     
   const pendingDispatchOrders = Array.isArray(dispatchOrdersData?.data || dispatchOrdersData)
     ? (dispatchOrdersData?.data || dispatchOrdersData).length
+    : 0;
+
+  const pendingOrders = Array.isArray(pendingOrdersData?.data || pendingOrdersData)
+    ? (pendingOrdersData?.data || pendingOrdersData).length
+    : 0;
+
+  const pendingPayments = Array.isArray(paymentsData?.data || paymentsData)
+    ? (paymentsData?.data || paymentsData).filter(p => p.status === 'partial' || p.status === 'pending' || (p.total > (p.paid || 0))).length
     : 0;
 
   if (!user) return null;
@@ -139,6 +162,22 @@ export default function Sidebar({ onLogout }) {
                       aria-label={`${pendingDispatchOrders} ready to dispatch`}
                     >
                       {pendingDispatchOrders}
+                    </span>
+                  )}
+                  {item.id === 'orders' && pendingOrders > 0 && (
+                    <span
+                      className="ml-auto bg-danger text-white text-[9px] rounded-lg py-0.5 px-1.5 font-bold"
+                      aria-label={`${pendingOrders} pending orders`}
+                    >
+                      {pendingOrders}
+                    </span>
+                  )}
+                  {item.id === 'payments' && pendingPayments > 0 && (
+                    <span
+                      className="ml-auto bg-danger text-white text-[9px] rounded-lg py-0.5 px-1.5 font-bold"
+                      aria-label={`${pendingPayments} pending payments`}
+                    >
+                      {pendingPayments}
                     </span>
                   )}
                 </>

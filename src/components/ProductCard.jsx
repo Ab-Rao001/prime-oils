@@ -4,7 +4,7 @@ import { Badge, Typography } from './ui';
 export function formatProductPrice(price) {
   const n = Number(price);
   if (Number.isNaN(n)) return '—';
-  return `PKR ${n.toLocaleString('en-PK')}`;
+  return `PKR ${n.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function ProductCard({ product, showStock = true }) {

@@ -132,7 +132,7 @@ export default function Orders({ role, user, onSendNotification }) {
     { header: 'Shop', accessorKey: 'shop', sortable: true },
     { header: 'Salesman', accessorKey: 'man', sortable: true },
     { header: 'Items', accessorKey: 'items', sortable: true },
-    { header: 'Total', accessorKey: 'total', sortable: true, cell: (o) => <Typography variant="body" weight="semibold">PKR {o.total.toLocaleString()}</Typography> },
+    { header: 'Total', accessorKey: 'total', sortable: true, cell: (o) => <Typography variant="body" weight="semibold">PKR {o.total.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography> },
     { header: 'Payment', accessorKey: 'paymentStatus', cell: (o) => (
       <div className="flex flex-col gap-1 items-start">
         <Badge variant="default">{o.pay}</Badge>
