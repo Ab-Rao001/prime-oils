@@ -19,7 +19,9 @@ export const permissions = {
     'complaints.read',
     'returns.read',
     'returns.manage',
-    'returns.create'
+    'returns.create',
+    'notifications.read',
+    'notifications.manage'
   ],
   salesman: [
     'customers.read',
@@ -37,13 +39,17 @@ export const permissions = {
     'dispatch.driver', // can accept driving tasks
     'catalog.read',
     'returns.read',
-    'reports.read'
+    'reports.read',
+    'notifications.read',
+    'notifications.manage'
   ],
   driver: [ // Added a driver role in case it's distinct
     'dispatch.read',
     'dispatch.driver',
     'delivery.complete',
-    'orders.read'
+    'orders.read',
+    'notifications.read',
+    'notifications.manage'
   ],
   shopkeeper: [
     'catalog.read',
@@ -57,7 +63,9 @@ export const permissions = {
     'returns.read',
     'returns.create',
     'dispatch.read',
-    'reports.read'
+    'reports.read',
+    'notifications.read',
+    'notifications.manage'
   ]
 };
 

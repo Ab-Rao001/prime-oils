@@ -68,7 +68,7 @@ export default function Orders({ role, user, onSendNotification }) {
   const { data: shopkeepers = [], isPending: shopsLoading } = useShopkeepers();
   const { data: products = [], isPending: productsLoading } = useProducts();
   const { data: dbSalesmen = [] } = useSalesmen();
-  const { data: users = [] } = useUsers();
+  const { data: users = [] } = useUsers({ enabled: role === 'admin' });
   
   const { mutate: updateStatusMutation } = useUpdateOrderStatus();
   const { mutateAsync: payOrderMutation } = usePayOrder();

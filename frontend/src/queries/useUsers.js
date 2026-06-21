@@ -15,9 +15,10 @@ export function useSalesmen() {
   });
 }
 
-export function useUsers() {
+export function useUsers(options = {}) {
   return useQuery({
     queryKey: ['users'],
     queryFn: () => userApi.getUsers(),
+    ...options
   });
 }

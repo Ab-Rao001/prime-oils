@@ -250,6 +250,7 @@ export const refresh = catchAsync(async (req, res) => {
     user: user._id,
     action: 'TOKEN_REFRESH',
     collectionName: 'Session',
+    documentId: session ? session._id : user._id,
     ipAddress: req.ip
   });
 
@@ -391,22 +392,31 @@ export const logout = catchAsync(async (req, res) => {
     await Session.findOneAndUpdate({ refreshTokenHash }, { isRevoked: true });
   }
 
+  let userId = req.user?.id;
+  if (!userId && refreshToken) {
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const session = await Session.findOne({ refreshTokenHash });
+    if (session) userId = session.user;
+  }
+
   try {
     const { getIO } = await import('../utils/socket.js');
     const io = getIO();
     // Assuming user's sockets join a room with their user ID
-    io.to(req.user.id.toString()).disconnectSockets(true);
+    if (userId) io.to(userId.toString()).disconnectSockets(true);
   } catch (e) {
     // Ignore if socket io is not fully initialized
   }
 
-  await AuditService.log({
-    user: req.user.id,
-    action: 'LOGOUT',
-    collectionName: 'User',
-    documentId: req.user.id,
-    ipAddress: req.ip
-  });
+  if (userId) {
+    await AuditService.log({
+      user: userId,
+      action: 'LOGOUT',
+      collectionName: 'User',
+      documentId: userId,
+      ipAddress: req.ip
+    });
+  }
 
   const isProd = process.env.NODE_ENV !== 'development';
   const cookieOptions = { httpOnly: true, secure: isProd, sameSite: isProd ? 'none' : 'lax' };
