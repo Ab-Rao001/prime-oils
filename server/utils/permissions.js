@@ -18,7 +18,8 @@ export const permissions = {
     'payments.read',
     'complaints.read',
     'returns.read',
-    'returns.manage'
+    'returns.manage',
+    'returns.create'
   ],
   salesman: [
     'customers.read',
@@ -34,7 +35,6 @@ export const permissions = {
     'dispatch.driver', // can accept driving tasks
     'catalog.read',
     'returns.read',
-    'returns.create',
     'reports.read'
   ],
   driver: [ // Added a driver role in case it's distinct

@@ -49,7 +49,7 @@ export default function Returns({ role }) {
   const { mutate: approveReturn } = useApproveReturn();
   const { mutate: receiveReturn, isPending: receiving } = useReceiveReturn();
 
-  const canCreate = ['admin', 'shopkeeper', 'salesman'].includes(role);
+  const canCreate = ['shopkeeper', 'supplier'].includes(role);
   const isWarehouse = role === 'admin' || role === 'supplier';
 
   const filtered = useMemo(() => {
