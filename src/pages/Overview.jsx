@@ -115,7 +115,7 @@ export default function Overview({ role, user, onNavigate }) {
 
       {role === 'admin' && salesChart.length > 0 && (
         <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-3.5 mb-3.5 max-lg:grid-cols-1">
-          <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+          <div className="bg-card border border-border dark:border-border-dark rounded-xl p-5">
             <Typography variant="body" weight="semibold" className="mb-3.5 block text-foreground">Sales vs Target (PKR 000s)</Typography>
             <ResponsiveContainer width="100%" height={190}>
               <BarChart data={salesChart} barGap={3}>
@@ -130,7 +130,7 @@ export default function Overview({ role, user, onNavigate }) {
           </div>
 
           {categoryChart.length > 0 && (
-            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-4.5">
+            <div className="bg-card border border-border dark:border-border-dark rounded-xl p-5">
               <Typography variant="body" weight="semibold" className="mb-3.5 block text-foreground">Sales by Category</Typography>
               <ResponsiveContainer width="100%" height={140}>
                 <PieChart>
@@ -146,7 +146,7 @@ export default function Overview({ role, user, onNavigate }) {
       )}
 
       {catalogProducts.length > 0 && (
-        <div className="mb-4.5">
+        <div className="mb-5">
           <Typography variant="body" weight="semibold" className="mb-3 block text-foreground">Product catalog &amp; prices</Typography>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {catalogProducts.map(p => (
@@ -157,7 +157,7 @@ export default function Overview({ role, user, onNavigate }) {
       )}
 
       <div className="bg-card border border-border dark:border-border-dark rounded-xl overflow-hidden">
-        <div className="py-3.5 px-4.5 border-b border-border dark:border-border-dark text-sm font-semibold text-foreground">
+        <div className="py-3.5 px-5 border-b border-border dark:border-border-dark text-sm font-semibold text-foreground">
           Recent Orders
         </div>
         <DataGrid 
