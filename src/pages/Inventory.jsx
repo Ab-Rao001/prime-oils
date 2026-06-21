@@ -156,6 +156,8 @@ export default function Inventory({ role }) {
         header: 'Product', 
         accessorKey: 'name', 
         sortable: true,
+        flex: 2,
+        minWidth: 150,
         cell: (p) => (
           <div className="flex items-center gap-3 font-semibold">
             {p.imageUrl && (
@@ -165,18 +167,18 @@ export default function Inventory({ role }) {
                 className="w-9 h-9 object-contain rounded-md bg-gray-50 dark:bg-gray-800"
               />
             )}
-            {p.name}
+            <span style={ { wordBreak: 'break-word', display: 'block', lineHeight: '1.2' }}>{p.name}</span>
           </div>
         )
       },
-      { header: 'Size', accessorKey: 'size', sortable: true, cell: p => p.size || '—' },
-      { header: 'Category', accessorKey: 'cat', sortable: true },
-      { header: 'Stock', accessorKey: 'stock', sortable: true, cell: p => <span className={p.stock < p.min ? 'text-danger font-bold' : 'font-semibold'}>{p.stock}</span> },
-      { header: 'Unit', accessorKey: 'unit', sortable: true },
-      { header: 'Cost', accessorKey: 'costPrice', sortable: true, cell: p => formatProductPrice(p.costPrice || 0) },
-      { header: 'Sell', accessorKey: 'price', sortable: true, cell: p => formatProductPrice(p.price) },
-      { header: 'Min', accessorKey: 'min', sortable: true },
-      { header: 'Status', accessorKey: 'status', cell: p => <Badge variant={p.stock < p.min ? 'danger' : 'success'}>{p.stock < p.min ? 'overdue' : 'active'}</Badge> }
+      { header: 'Size', accessorKey: 'size', sortable: true, cell: p => p.size || '—', minWidth: 80, flex: 0.8 },
+      { header: 'Category', accessorKey: 'cat', sortable: true, minWidth: 100, flex: 1 },
+      { header: 'Stock', accessorKey: 'stock', sortable: true, cell: p => <span className={p.stock < p.min ? 'text-danger font-bold' : 'font-semibold'}>{p.stock}</span>, minWidth: 70, flex: 0.7 },
+      { header: 'Unit', accessorKey: 'unit', sortable: true, minWidth: 70, flex: 0.7 },
+      { header: 'Cost', accessorKey: 'costPrice', sortable: true, cell: p => formatProductPrice(p.costPrice || 0), minWidth: 90, flex: 1 },
+      { header: 'Sell', accessorKey: 'price', sortable: true, cell: p => formatProductPrice(p.price), minWidth: 90, flex: 1 },
+      { header: 'Min', accessorKey: 'min', sortable: true, minWidth: 60, flex: 0.6 },
+      { header: 'Status', accessorKey: 'status', cell: p => <Badge variant={p.stock < p.min ? 'danger' : 'success'}>{p.stock < p.min ? 'overdue' : 'active'}</Badge>, minWidth: 80, flex: 0.8 }
     ];
 
     if (canAddProduct) {

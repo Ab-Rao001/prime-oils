@@ -241,8 +241,8 @@ const DataGrid = ({
                       {columns.map((col, i) => (
                         <div 
                           key={i} 
-                          style={ { flex: col.width ? `0 0 ${col.width}px` : 1, minWidth: col.minWidth || (col.width ? undefined : '100px') } }
-                          className={`p-3 text-[13px] text-foreground flex items-center ${!col.width ? 'overflow-hidden text-ellipsis whitespace-nowrap' : ''}`}
+                          style={ { flex: col.width ? `0 0 ${col.width}px` : (col.flex || 1), minWidth: col.minWidth || (col.width ? undefined : '100px') } }
+                          className={`p-3 text-[13px] text-foreground flex items-center`}
                           role="gridcell"
                         >
                           {col.cell ? col.cell(row) : row[col.accessorKey]}
