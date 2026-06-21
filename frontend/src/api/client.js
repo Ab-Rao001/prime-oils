@@ -1,7 +1,11 @@
 import { enqueueMutation } from '../utils/db';
 import { useNetworkStore } from '../store/useNetworkStore';
 
-export const API_BASE = (process.env.REACT_APP_API_URL || '/api').replace(/\/$/, '');
+let rawUrl = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
+if (rawUrl !== '/api' && !rawUrl.endsWith('/api')) {
+  rawUrl += '/api';
+}
+export const API_BASE = rawUrl;
 const REQUEST_TIMEOUT_MS = 8000;
 
 let isRefreshing = false;

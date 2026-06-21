@@ -26,7 +26,7 @@ export const SocketProvider = ({ children }) => {
 
     // We use empty string so socket.io connects to the same host/port the browser is on,
     // allowing the CRA proxy to forward it via setupProxy.js and preserving cookies.
-    const socketUrl = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/api\/?$/, '') : '';
+    const socketUrl = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '') : '';
     const newSocket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling']
