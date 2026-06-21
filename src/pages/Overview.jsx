@@ -4,6 +4,7 @@ import C from '../theme';
 import StatCard from '../components/StatCard';
 import ProductCard from '../components/ProductCard';
 import { Badge, Typography } from '../components/ui';
+import { ShoppingCart, Banknote, Calendar, Clock, Package, Users, AlertTriangle } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 import { ApiError } from '../components/ApiMessage';
 import DataGrid from '../components/DataGrid';
@@ -74,40 +75,40 @@ export default function Overview({ role, user, onNavigate }) {
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3 mb-5">
         <div className="cursor-pointer" onClick={() => onNavigate?.('orders')}>
-          <StatCard icon="🛒" label="Total Orders" value={String(totalOrders)} sub={`${processingOrders} processing`} colorClass="text-gold bg-gold/15" />
+          <StatCard icon={<ShoppingCart size={24} />} label="Total Orders" value={String(totalOrders)} sub={`${processingOrders} processing`} colorClass="text-gold bg-gold/15" />
         </div>
 
         {(role === 'admin' || role === 'salesman' || role === 'shopkeeper') && (
           <div className="cursor-pointer" onClick={() => onNavigate?.(role === 'admin' ? 'cashflow' : 'payments')}>
-            <StatCard icon="💰" label={role === 'shopkeeper' ? 'Total Paid' : 'Revenue (Collected)'} value={fmtK(revenuePaid)} sub={role === 'shopkeeper' ? `${myPayments.length} payments` : `${myPayments.length} accounts`} colorClass="text-success bg-success/15" />
+            <StatCard icon={<Banknote size={24} />} label={role === 'shopkeeper' ? 'Total Paid' : 'Revenue (Collected)'} value={fmtK(revenuePaid)} sub={role === 'shopkeeper' ? `${myPayments.length} payments` : `${myPayments.length} accounts`} colorClass="text-success bg-success/15" />
           </div>
         )}
 
         {role === 'salesman' && (
           <div className="cursor-pointer" onClick={() => onNavigate?.('payments')}>
-            <StatCard icon="📅" label="Daily Collection" value={fmtK(dailyCollection)} colorClass="text-info bg-info/15" />
+            <StatCard icon={<Calendar size={24} />} label="Daily Collection" value={fmtK(dailyCollection)} colorClass="text-info bg-info/15" />
           </div>
         )}
 
         <div className="cursor-pointer" onClick={() => onNavigate?.('payments')}>
-          <StatCard icon="⏳" label={role === 'salesman' ? "Amount Due in Market" : "Pending Payments"} value={fmtK(revenuePending)} colorClass="text-warn bg-warn/15" />
+          <StatCard icon={<Clock size={24} />} label={role === 'salesman' ? "Amount Due in Market" : "Pending Payments"} value={fmtK(revenuePending)} colorClass="text-warn bg-warn/15" />
         </div>
 
         {role !== 'shopkeeper' && (
           <div className="cursor-pointer" onClick={() => onNavigate?.('inventory')}>
-            <StatCard icon="📦" label="Products" value={`${products.length} items`} sub={`${lowStockCount} low stock`} colorClass="text-info bg-info/15" />
+            <StatCard icon={<Package size={24} />} label="Products" value={`${products.length} items`} sub={`${lowStockCount} low stock`} colorClass="text-info bg-info/15" />
           </div>
         )}
 
         {role === 'admin' && (
           <div className="cursor-pointer" onClick={() => onNavigate?.('shopkeepers')}>
-            <StatCard icon="👥" label="Active Shopkeepers" value={`${activeShops} / ${shopkeepers.length}`} colorClass="text-gold bg-gold/15" />
+            <StatCard icon={<Users size={24} />} label="Active Shopkeepers" value={`${activeShops} / ${shopkeepers.length}`} colorClass="text-gold bg-gold/15" />
           </div>
         )}
 
         {(role === 'admin' || role === 'shopkeeper') && (
           <div className="cursor-pointer" onClick={() => onNavigate?.('complaints')}>
-            <StatCard icon="⚠️" label="Open Complaints" value={String(openComplaints)} colorClass="text-danger bg-danger/15" />
+            <StatCard icon={<AlertTriangle size={24} />} label="Open Complaints" value={String(openComplaints)} colorClass="text-danger bg-danger/15" />
           </div>
         )}
       </div>

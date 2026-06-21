@@ -13,6 +13,7 @@ import { Badge, EnterpriseModal, Input, Button, Typography } from '../components
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { Banknote, Clock, ClipboardList } from 'lucide-react';
 
 const paymentSchema = z.object({
   amount: z.number({ invalid_type_error: "Amount is required" }).positive("Amount must be positive")
@@ -95,10 +96,10 @@ export default function Payments({ role, user, onSendNotification }) {
       <SectionHeader title="Payments" />
       <ApiError error={error} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
-        <StatCard icon="💰" label={role === 'salesman' ? 'Period Collection' : 'Collected'} value={`PKR ${totalPaid.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color={C.success} />
-        <StatCard icon="⏳" label={role === 'salesman' ? 'Amount Due in Market' : 'Outstanding'} value={`PKR ${totalDue.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color={C.warn} />
-        <StatCard icon="📋" label="Accounts" value={String(visiblePays.length)} />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5 mb-8">
+        <StatCard icon={<Banknote size={24} />} label={role === 'salesman' ? 'Period Collection' : 'Collected'} value={`PKR ${totalPaid.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color={C.success} />
+        <StatCard icon={<Clock size={24} />} label={role === 'salesman' ? 'Amount Due in Market' : 'Outstanding'} value={`PKR ${totalDue.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} color={C.warn} />
+        <StatCard icon={<ClipboardList size={24} />} label="Accounts" value={String(visiblePays.length)} />
       </div>
 
       <div className="flex-1 min-h-[400px]">

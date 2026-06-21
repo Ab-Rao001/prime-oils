@@ -20,6 +20,7 @@ import DataGrid from '../components/DataGrid';
 import { Typography, Button, Input } from '../components/ui';
 import { PIE_COLORS } from '../config/charts';
 import { analyticsApi } from '../api/analyticsApi';
+import { Banknote, ShoppingCart, CheckCircle, ClipboardList, CreditCard, TrendingUp } from 'lucide-react';
 
 function getDefaultDateRange() {
   const now = new Date();
@@ -156,24 +157,24 @@ export default function Reports({ role }) {
       {summary && (
         <>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 mb-5">
-            <StatCard icon="💰" label={role === 'shopkeeper' ? 'Total Spend' : 'Revenue'} value={formatPkr(summary.totalRevenue)} colorClass="text-gold bg-gold/15" />
-            <StatCard icon="🛒" label="Orders" value={String(summary.totalOrders)} colorClass="text-info bg-info/15" />
+            <StatCard icon={<Banknote size={24} />} label={role === 'shopkeeper' ? 'Total Spend' : 'Revenue'} value={formatPkr(summary.totalRevenue)} colorClass="text-gold bg-gold/15" />
+            <StatCard icon={<ShoppingCart size={24} />} label="Orders" value={String(summary.totalOrders)} colorClass="text-info bg-info/15" />
             <StatCard
-              icon="✅"
+              icon={<CheckCircle size={24} />}
               label={role === 'salesman' ? 'Period Collection' : role === 'shopkeeper' ? 'Total Paid' : 'Collected'}
               value={formatPkr(summary.totalPaid)}
               colorClass="text-success bg-success/15"
             />
             <StatCard
-              icon="📋"
+              icon={<ClipboardList size={24} />}
               label={role === 'salesman' ? 'Amount Due in Market' : role === 'shopkeeper' ? 'Amount Due' : 'Outstanding'}
               value={formatPkr(summary.outstandingBalance)}
               colorClass="text-warn bg-warn/15"
             />
             {role === 'admin' && (
               <>
-                <StatCard icon="💸" label="Spendings" value={formatPkr(summary.totalExpenses || 0)} colorClass="text-danger bg-danger/15" />
-                <StatCard icon="📈" label="Net Profit" value={formatPkr(summary.netProfit || 0)} colorClass="text-success bg-success/15" />
+                <StatCard icon={<CreditCard size={24} />} label="Spendings" value={formatPkr(summary.totalExpenses || 0)} colorClass="text-danger bg-danger/15" />
+                <StatCard icon={<TrendingUp size={24} />} label="Net Profit" value={formatPkr(summary.netProfit || 0)} colorClass="text-success bg-success/15" />
               </>
             )}
           </div>

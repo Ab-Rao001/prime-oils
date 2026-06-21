@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import C from '../theme';
 import { Badge, Skeleton, EmptyState, ConfirmationDialog, Button, Input, Select, Typography, LocationDisplay } from '../components/ui';
+import { Users } from 'lucide-react';
 import SectionHeader from '../components/SectionHeader';
 import SearchBar from '../components/SearchBar';
 import { useFetch } from '../hooks/useFetch';
@@ -217,8 +218,8 @@ export default function Shopkeepers({ role }) {
           {startOffset > 0 && <div style={ { height: `${startOffset}px` } } />}
           
           <div className="flex flex-col gap-4">
-            {visibleItems.length === 0 ? (
-              <EmptyState title="No shopkeepers found" description="Adjust your search criteria." icon="👥" />
+            {filtered.length === 0 ? (
+              <EmptyState title="No shopkeepers found" description="Adjust your search criteria." icon={<Users size={36} />} />
             ) : (
               visibleItems.map((rowItems, rowIndex) => (
                 <div key={rowIndex} style={ { display: 'grid', gridTemplateColumns: `repeat(${colsCount}, 1fr)`, gap: '14px', height: '290px' } }>

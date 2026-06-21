@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Megaphone, Banknote, CreditCard, PiggyBank } from 'lucide-react';
 import C from '../theme';
 import Badge from '../components/Badge';
 import SectionHeader from '../components/SectionHeader';
@@ -125,11 +126,11 @@ export default function Marketing() {
         </div>
       )}
 
-      <div style={ { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12, marginBottom: 18 }}>
-        <StatCard icon="📣" label="Active Campaigns" value={campaigns.filter(c => c.status === 'active').length}   color={C.success} />
-        <StatCard icon="💰" label="Total Budget"     value={`PKR ${(totalBudget    / 1000).toFixed(0)}K`} color={C.gold}    />
-        <StatCard icon="💸" label="Total Spent"      value={`PKR ${(totalSpent     / 1000).toFixed(0)}K`} color={C.warn}    />
-        <StatCard icon="🏦" label="Remaining"        value={`PKR ${(totalRemaining / 1000).toFixed(0)}K`} color={C.info}    />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5 mb-8">
+        <StatCard icon={<Megaphone size={24} />} label="Active Campaigns" value={campaigns.filter(c => c.status === 'active').length}   color={C.success} />
+        <StatCard icon={<Banknote size={24} />} label="Total Budget"     value={`PKR ${(totalBudget    / 1000).toFixed(0)}K`} color={C.gold}    />
+        <StatCard icon={<CreditCard size={24} />} label="Total Spent"      value={`PKR ${(totalSpent     / 1000).toFixed(0)}K`} color={C.warn}    />
+        <StatCard icon={<PiggyBank size={24} />} label="Remaining"        value={`PKR ${(totalRemaining / 1000).toFixed(0)}K`} color={C.info}    />
       </div>
 
       <div style={ { display: 'flex', flexDirection: 'column', gap: 14 }}>
