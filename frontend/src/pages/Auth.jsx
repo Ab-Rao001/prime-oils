@@ -143,7 +143,7 @@ export default function Auth({ defaultTab = 'login', onBack }) {
             <Input 
               label="Email Address" 
               type="email" 
-              placeholder="admin@primeoil.com" 
+              placeholder="your@email.com" 
               {...registerLogin('email')} 
               error={loginErrors.email}
               className="bg-black/10 text-white border-gold/30 focus:border-gold"

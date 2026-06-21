@@ -88,7 +88,7 @@ app.use(securityLogger);
 // 2. Strict CORS Configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000', 'http://localhost:5173'];
+  : ['http://localhost:3000', 'http://localhost:5173', 'https://prime-oils-5w4p.vercel.app'];
 
 app.use(
   cors({
@@ -224,7 +224,7 @@ async function start() {
   // Initialize Socket.io
   const allowedOriginsList = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000', 'http://localhost:5173'];
+  : ['http://localhost:3000', 'http://localhost:5173', 'https://prime-oils-5w4p.vercel.app'];
   
   initIO(httpServer, allowedOriginsList);
   setupAuthCleanupJob();
