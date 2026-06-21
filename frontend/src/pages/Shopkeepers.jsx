@@ -69,7 +69,7 @@ export default function Shopkeepers({ role }) {
     return chunks;
   }, [filtered, colsCount]);
 
-  const rowHeight = 350; 
+  const rowHeight = 366; 
   const viewportHeight = 600;
   
   const { visibleItems, totalHeight, startOffset, onScroll } = useVirtualScroll({
@@ -222,7 +222,7 @@ export default function Shopkeepers({ role }) {
               <EmptyState title="No shopkeepers found" description="Adjust your search criteria." icon={<Users size={36} />} />
             ) : (
               visibleItems.map((rowItems, rowIndex) => (
-                <div key={rowIndex} style={ { display: 'grid', gridTemplateColumns: `repeat(${colsCount}, 1fr)`, gap: '14px', height: '334px' } }>
+                <div key={rowIndex} style={ { display: 'grid', gridTemplateColumns: `repeat(${colsCount}, 1fr)`, gap: '14px', height: '350px' } }>
                   {rowItems.map(s => (
                     <div key={s._id || s.id} className="card-premium flex flex-col justify-between h-full animate-slideUp">
                       <div className="flex justify-between items-start">
